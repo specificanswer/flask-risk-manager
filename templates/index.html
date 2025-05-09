@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Futures Trader</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+        .card {
+            margin-bottom: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            background-color: #212529;
+            border-color: #343a40;
+        }
+        .position-card {
+            border-left: 4px solid #198754;
+        }
+        .position-card.short {
+            border-left: 4px solid #dc3545;
+        }
+        .flash-messages {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            max-width: 350px;
+        }
+        .toggle-form {
+            cursor: pointer;
+        }
+        .nav-pills .nav-link.active {
+            background-color: #0d6efd;
+        }
+        .profit {
+            color: #198754;
+            font-weight: bold;
+        }
+        .loss {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        /* Additional styles for the enhanced UI */
+        .form-range::-webkit-slider-thumb {
+            background: #0d6efd;
+        }
+        .form-range::-moz-range-thumb {
+            background: #0d6efd;
+        }
+        .form-range::-ms-thumb {
+            background: #0d6efd;
+        }
+        .size-preset {
+            min-width: 50px;
+        }
+        .table {
+            color: #e0e0e0;
+        }
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .status-active {
+            background-color: #198754;
+        }
+        .status-inactive {
+            background-color: #6c757d;
+        }
+        .refresh-btn {
+            float: right;
+            font-size: 0.8rem;
+            padding: 0.2rem 0.5rem;
+        }
+        .auto-refresh-status {
+            font-size: 0.75rem;
+            margin-left: 10px;
+        }
+        .last-update {
+            font-size: 0.7rem;
+            color: #6c757d;
+            text-align: right;
+            margin-top: 5px;
+        }
+        .form-switch .form-check-input {
+            width: 3em;
+        }
+        .card-header-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .pending-badge {
+            background-color: #fd7e14; 
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">Crypto Futures Trader</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{{ url_for('index') }}">Dashboard</a>
+                    </li>
+                </ul>
+                <span class="navbar-text me-3">
+                    Exchange: <span class="badge bg-success">{{ status.exchange|upper }}</span>
+                </span>
+                <a href="{{ url_for('setup') }}" class="btn btn-outline-light btn-sm">Change Exchange</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Flash Messages -->
+        <div class="flash-messages">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
+
+        <!-- Auto-refresh Controls -->
+        <div class="card mb-3">
+            <div class="card-body p-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="autoRefreshToggle" checked>
+                        <label class="form-check-label" for="autoRefreshToggle">Auto-refresh</label>
+                        <span id="refreshStatus" class="auto-refresh-status">
+                            <span class="status-indicator status-active"></span> Active (30s)
+                        </span>
+                    </div>
+                    
+                    <div>
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline-primary" id="refreshInterval" data-interval="30">30s</button>
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false"></button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item refresh-interval" href="#" data-interval="10">10 seconds</a></li>
+                                <li><a class="dropdown-item refresh-interval" href="#" data-interval="30">30 seconds</a></li>
+                                <li><a class="dropdown-item refresh-interval" href="#" data-interval="60">1 minute</a></li>
+                                <li><a class="dropdown-item refresh-interval" href="#" data-interval="300">5 minutes</a></li>
+                            </ul>
+                        </div>
+                        <button id="manualRefresh" class="btn btn-primary btn-sm"><i class="bi bi-arrow-repeat"></i> Refresh Now</button>
+                    </div>
+                </div>
+                <div class="last-update text-end" id="lastUpdateTime">Last updated: Never</div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Trading Status Card -->
+            <div class="col-lg-4 mb-4">
+                <div class="card">
+                    <div class="card-header card-header-actions bg-primary text-white">
+                        <div>
+                            <h5 class="mb-0">Trading Status</h5>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Exchange:</strong> {{ status.exchange|upper }}</p>
+                        <p><strong>Can Trade:</strong> 
+                            {% if status.can_trade %}
+                                <span class="badge bg-success">Yes</span>
+                            {% else %}
+                                <span class="badge bg-danger">No</span>
+                            {% endif %}
+                        </p>
+                        <p><strong>Status:</strong> {{ status.status_message }}</p>
+                        <p><strong>Trades Today:</strong> {{ status.daily_trade_count }} / {{ status.max_trades_per_day }}</p>
+                        <p><strong>Daily PnL:</strong> 
+                            {% if status.daily_pnl > 0 %}
+                                <span class="profit">+${{ status.daily_pnl }}</span>
+                            {% elif status.daily_pnl < 0 %}
+                                <span class="loss">${{ status.daily_pnl }}</span>
+                            {% else %}
+                                ${{ status.daily_pnl }}
+                            {% endif %}
+                        </p>
+                        <p><strong>Daily Loss Limit:</strong> ${{ status.daily_loss_limit }}</p>
+                        <p><strong>Max Position Size:</strong> ${{ status.max_position_size }}</p>
+                        <p><strong>Last Trade:</strong> {{ status.last_trade_time|default('None') }}</p>
+                        <p><strong>Cooldown Ends:</strong> {{ status.cooldown_ends|default('N/A') }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Open Positions Card -->
+            <div class="col-lg-8 mb-4">
+                <div class="card">
+                    <div class="card-header card-header-actions bg-info text-white">
+                        <div>
+                            <h5 class="mb-0">Open Positions</h5>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="positions-container">
+                            {% if positions %}
+                                <div class="row">
+                                    {% for position in positions %}
+                                        <div class="col-md-6 mb-3">
+                                            <div class="card position-card {% if position.side == 'short' %}short{% endif %}">
+                                                <div class="card-body">
+                                                    <h6 class="card-title">{{ position.symbol }}</h6>
+                                                    <p class="mb-1"><strong>Side:</strong> 
+                                                        {% if position.side == 'long' %}
+                                                            <span class="badge bg-success">LONG</span>
+                                                        {% else %}
+                                                            <span class="badge bg-danger">SHORT</span>
+                                                        {% endif %}
+                                                    </p>
+                                                    <p class="mb-1"><strong>Size:</strong> {{ position.contracts }}</p>
+                                                    <p class="mb-1"><strong>Entry Price:</strong> {{ position.entryPrice|default('N/A') }}</p>
+                                                    <p class="mb-1"><strong>Leverage:</strong> {{ position.leverage|default('N/A') }}x</p>
+                                                    <p class="mb-1"><strong>Unrealized PnL:</strong> 
+                                                        {% if position.unrealizedPnl is defined %}
+                                                            {% if position.unrealizedPnl > 0 %}
+                                                                <span class="profit">+${{ position.unrealizedPnl }}</span>
+                                                            {% else %}
+                                                                <span class="loss">${{ position.unrealizedPnl }}</span>
+                                                            {% endif %}
+                                                        {% else %}
+                                                            <span>N/A</span>
+                                                        {% endif %}
+                                                    </p>
+                                                    <form action="{{ url_for('close_position') }}" method="post" class="mt-2">
+                                                        <input type="hidden" name="symbol" value="{{ position.symbol }}">
+                                                        <button type="submit" class="btn btn-danger btn-sm">Close Position</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="alert alert-secondary">
+                                    <i class="bi bi-info-circle me-2"></i> No open positions
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Pending Orders Card -->
+                <div class="card mb-4" id="pending-orders-card">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">Pending Orders</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="pending-orders-container">
+                            {% if pending_orders %}
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Time</th>
+                                                <th>Symbol</th>
+                                                <th>Type</th>
+                                                <th>Side</th>
+                                                <th>Amount</th>
+                                                <th>Price</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for order in pending_orders %}
+                                                <tr>
+                                                    <td>{{ order.time }}</td>
+                                                    <td>{{ order.symbol }}</td>
+                                                    <td>{{ order.type }}</td>
+                                                    <td>
+                                                        {% if order.side == 'buy' %}
+                                                            <span class="badge bg-success">BUY</span>
+                                                        {% else %}
+                                                            <span class="badge bg-danger">SELL</span>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td>${{ order.amount }}</td>
+                                                    <td>{{ order.price }}</td>
+                                                    <td>
+                                                        <form action="{{ url_for('cancel_order', order_id=order.id) }}" method="post">
+                                                            <button type="submit" class="btn btn-danger btn-sm">Cancel</button>
+                                                        </form>
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <div class="alert alert-secondary">
+                                    <i class="bi bi-info-circle me-2"></i> No pending orders
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Trading Forms Tabs -->
+            <div class="col-lg-6 mb-4">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <ul class="nav nav-pills card-header-pills" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="place-trade-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#place-trade" type="button" role="tab" 
+                                        aria-controls="place-trade" aria-selected="true">
+                                    Place Trade
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="update-pnl-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#update-pnl" type="button" role="tab" 
+                                        aria-controls="update-pnl" aria-selected="false">
+                                    Update PnL
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div class="tab-content">
+                            <!-- Place Trade Tab -->
+                            <div class="tab-pane fade show active" id="place-trade" role="tabpanel" aria-labelledby="place-trade-tab">
+                                <form action="{{ url_for('place_trade') }}" method="post">
+                                    {{ trade_form.hidden_tag() }}
+                                    
+                                    <div class="mb-3">
+                                        <label for="symbol" class="form-label">Symbol</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" id="symbol" name="symbol" required
+                                                placeholder="e.g. BTC/USDT or BTCUSDT" value="{{ default_symbol }}">
+                                            <button class="btn btn-outline-secondary" type="button" id="refreshPrice">
+                                                <i class="bi bi-arrow-clockwise"></i> Get Price
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="side" class="form-label">Side</label>
+                                        <div class="btn-group w-100" role="group">
+                                            <input type="radio" class="btn-check" name="side" id="side-buy" value="buy" autocomplete="off" checked>
+                                            <label class="btn btn-outline-success" for="side-buy">Buy (Long)</label>
+                                            
+                                            <input type="radio" class="btn-check" name="side" id="side-sell" value="sell" autocomplete="off">
+                                            <label class="btn btn-outline-danger" for="side-sell">Sell (Short)</label>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Enhanced Position Size with Slider -->
+                                    <div class="mb-3">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label for="amount" class="form-label mb-0">Position Size</label>
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="sizeUnitToggle">
+                                                <label class="form-check-label" for="sizeUnitToggle">
+                                                    <span id="sizeUnitLabel">USD</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="position-relative mb-2">
+                                            <input type="range" class="form-range" id="amount_slider" 
+                                                min="0" max="{{ status.max_position_size }}" step="0.1" value="1">
+                                        </div>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div class="input-group" style="max-width: 180px;">
+                                                <span class="input-group-text" id="amountPrefix">$</span>
+                                                <input type="number" class="form-control" id="amount" name="amount" 
+                                                    step="0.01" min="0.01" max="{{ status.max_position_size }}" value="1" required>
+                                            </div>
+                                            <div class="btn-group" role="group">
+                                                <button type="button" class="btn btn-outline-secondary btn-sm size-preset" data-value="25">25%</button>
+                                                <button type="button" class="btn btn-outline-secondary btn-sm size-preset" data-value="50">50%</button>
+                                                <button type="button" class="btn btn-outline-secondary btn-sm size-preset" data-value="75">75%</button>
+                                                <button type="button" class="btn btn-outline-secondary btn-sm size-preset" data-value="100">Max</button>
+                                            </div>
+                                        </div>
+                                        <div class="form-text text-danger">Maximum: ${{ status.max_position_size }}</div>
+                                    </div>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="order_type" class="form-label">Order Type</label>
+                                                <select class="form-select" id="order_type" name="order_type">
+                                                    <option value="market">Market</option>
+                                                    <option value="limit">Limit</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="price" class="form-label">Limit Price</label>
+                                                <input type="number" class="form-control" id="price" name="price" 
+                                                    step="any" min="0">
+                                                <div class="form-text">Required for limit orders</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Advanced Options Section -->
+                                    <div class="accordion mb-3" id="advancedOptions">
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header" id="headingAdvanced">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                                    data-bs-target="#collapseAdvanced" aria-expanded="false" aria-controls="collapseAdvanced">
+                                                    Advanced Options
+                                                </button>
+                                            </h2>
+                                            <div id="collapseAdvanced" class="accordion-collapse collapse" aria-labelledby="headingAdvanced" 
+                                                data-bs-parent="#advancedOptions">
+                                                <div class="accordion-body">
+                                                    <div class="row">
+                                                        <div class="col-md-6">
+                                                            <div class="mb-3">
+                                                                <label for="stop_loss" class="form-label">Stop Loss</label>
+                                                                <input type="number" class="form-control" id="stop_loss" name="stop_loss" step="any" min="0">
+                                                                <div class="form-text">Market order when triggered</div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <div class="mb-3">
+                                                                <label for="take_profit" class="form-label">Take Profit</label>
+                                                                <input type="number" class="form-control" id="take_profit" name="take_profit" step="any" min="0">
+                                                                <div class="form-text">Limit order when triggered</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- PnL Calculator Card -->
+                                                    <div class="card bg-dark mb-3">
+                                                        <div class="card-body p-2">
+                                                            <h6 class="card-title">Estimated PNL</h6>
+                                                            <div class="row g-2">
+                                                                <div class="col-6">
+                                                                    <div class="d-flex justify-content-between">
+                                                                        <span>Stop-Loss:</span>
+                                                                        <span id="sl_pnl" class="loss">-$0.00 (0.00%)</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="col-6">
+                                                                    <div class="d-flex justify-content-between">
+                                                                        <span>Take-Profit:</span>
+                                                                        <span id="tp_pnl" class="profit">+$0.00 (0.00%)</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="col-12">
+                                                                    <div class="d-flex justify-content-between">
+                                                                        <span>Risk/Reward Ratio:</span>
+                                                                        <span id="risk_reward">1:1.00</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div class="row">
+                                                        <div class="col-md-6">
+                                                            <div class="mb-3">
+                                                                <label for="leverage" class="form-label">Leverage</label>
+                                                                <select class="form-select" id="leverage" name="leverage">
+                                                                    <option value="1">1x</option>
+                                                                    <option value="2">2x</option>
+                                                                    <option value="3">3x</option>
+                                                                    <option value="5" selected>5x</option>
+                                                                    <option value="10">10x</option>
+                                                                    <option value="20">20x</option>
+                                                                    <option value="50">50x</option>
+                                                                    <option value="100">100x</option>
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <div class="mb-3">
+                                                                <label for="margin_mode" class="form-label">Margin Mode</label>
+                                                                <select class="form-select" id="margin_mode" name="margin_mode">
+                                                                    <option value="isolated" selected>Isolated</option>
+                                                                    <option value="cross">Cross</option>
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Liquidation Price Display -->
+                                                    <div class="mb-3">
+                                                        <div class="card bg-dark mb-3">
+                                                            <div class="card-body p-2">
+                                                                <div class="d-flex justify-content-between align-items-center">
+                                                                    <span>Liquidation Price:</span>
+                                                                    <span id="liquidation_price" class="fw-bold text-danger">--</span>
+                                                                </div>
+                                                                <div class="progress" style="height: 5px;">
+                                                                    <div id="liquidation_indicator" class="progress-bar bg-danger" role="progressbar" style="width: 0%;"></div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div class="mb-3 form-check">
+                                                        <input type="checkbox" class="form-check-input" id="post_only" name="post_only">
+                                                        <label class="form-check-label" for="post_only">Post Only (Maker Only)</label>
+                                                        <div class="form-text">For limit orders, ensures order is a maker</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <button type="submit" class="btn btn-success w-100">
+                                        <i class="bi bi-check-circle me-2"></i>Place Trade
+                                    </button>
+                                </form>
+                            </div>
+                            
+                            <!-- Update PnL Tab -->
+                            <div class="tab-pane fade" id="update-pnl" role="tabpanel" aria-labelledby="update-pnl-tab">
+                                <form action="{{ url_for('update_pnl') }}" method="post">
+                                    {{ pnl_form.hidden_tag() }}
+                                    <div class="mb-3">
+                                        <label for="pnl_amount" class="form-label">PnL Amount (USD)</label>
+                                        <input type="number" class="form-control" id="pnl_amount" name="amount" 
+                                            step="0.01" required>
+                                        <div class="form-text">Enter positive value for profit, negative for loss</div>
+                                    </div>
+                                    <button type="submit" class="btn btn-warning w-100">
+                                        <i class="bi bi-gear me-2"></i>Update PnL
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trade History Card -->
+            <div class="col-lg-6 mb-4">
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0">Trade History</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="trade-history-container">
+                            {% if status.trades_history %}
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Time</th>
+                                                <th>Symbol</th>
+                                                <th>Side</th>
+                                                <th>Size</th>
+                                                <th>Price</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for trade in status.trades_history %}
+                                                <tr>
+                                                    <td>{{ trade.time }}</td>
+                                                    <td>{{ trade.symbol }}</td>
+                                                    <td>
+                                                        {% if trade.side == 'buy' %}
+                                                            <span class="badge bg-success">BUY</span>
+                                                        {% else %}
+                                                            <span class="badge bg-danger">SELL</span>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td>${{ trade.amount }}</td>
+                                                    <td>{{ trade.price }}</td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <div class="alert alert-secondary">
+                                    <i class="bi bi-info-circle me-2"></i> No trade history available
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <footer class="bg-dark text-white py-3 mt-4">
+        <div class="container text-center">
+            <p class="mb-0">Crypto Futures Trader &copy; 2025</p>
+        </div>
+    </footer>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Calculate PNL and other values
+        function updateCalculations() {
+            const side = document.querySelector('input[name="side"]:checked').value;
+            const price = parseFloat(document.getElementById('price').value) || 0;
+            const amount = parseFloat(document.getElementById('amount').value) || 0;
+            const leverage = parseFloat(document.getElementById('leverage').value) || 1;
+            const stopLoss = parseFloat(document.getElementById('stop_loss').value) || 0;
+            const takeProfit = parseFloat(document.getElementById('take_profit').value) || 0;
+            
+            // Skip calculations if we're missing essential values
+            if (price === 0 || amount === 0) return;
+            
+            // Calculate position size in coins
+            const positionSize = amount / price;
+            
+            // Calculate PNL for stop loss
+            if (stopLoss > 0) {
+                let slPnlAmount, slPnlPercent;
+                if (side === 'buy') {
+                    slPnlAmount = positionSize * (stopLoss - price) * leverage;
+                    slPnlPercent = ((stopLoss - price) / price) * 100 * leverage;
+                } else {
+                    slPnlAmount = positionSize * (price - stopLoss) * leverage;
+                    slPnlPercent = ((price - stopLoss) / price) * 100 * leverage;
+                }
+                
+                const slPnlElement = document.getElementById('sl_pnl');
+                slPnlElement.textContent = `${slPnlAmount.toFixed(2) > 0 ? '+' : ''}${slPnlAmount.toFixed(2)} (${slPnlPercent.toFixed(2)}%)`;
+                slPnlElement.className = slPnlAmount >= 0 ? 'profit' : 'loss';
+            }
+            
+            // Calculate PNL for take profit
+            if (takeProfit > 0) {
+                let tpPnlAmount, tpPnlPercent;
+                if (side === 'buy') {
+                    tpPnlAmount = positionSize * (takeProfit - price) * leverage;
+                    tpPnlPercent = ((takeProfit - price) / price) * 100 * leverage;
+                } else {
+                    tpPnlAmount = positionSize * (price - takeProfit) * leverage;
+                    tpPnlPercent = ((price - takeProfit) / price) * 100 * leverage;
+                }
+                
+                const tpPnlElement = document.getElementById('tp_pnl');
+                tpPnlElement.textContent = `${tpPnlAmount.toFixed(2) > 0 ? '+' : ''}${tpPnlAmount.toFixed(2)} (${tpPnlPercent.toFixed(2)}%)`;
+                tpPnlElement.className = tpPnlAmount >= 0 ? 'profit' : 'loss';
+            }
+            
+            // Calculate risk-reward ratio if both SL and TP are set
+            if (stopLoss > 0 && takeProfit > 0) {
+                let slAmount, tpAmount;
+                if (side === 'buy') {
+                    slAmount = Math.abs(stopLoss - price);
+                    tpAmount = Math.abs(takeProfit - price);
+                } else {
+                    slAmount = Math.abs(price - stopLoss);
+                    tpAmount = Math.abs(price - takeProfit);
+                }
+                
+                const ratio = (tpAmount / slAmount).toFixed(2);
+                document.getElementById('risk_reward').textContent = `1:${ratio}`;
+            }
+            
+            // Update liquidation price
+            calculateLiquidationPrice();
+        }
+
+        function calculateLiquidationPrice() {
+            const side = document.querySelector('input[name="side"]:checked').value;
+            const price = parseFloat(document.getElementById('price').value) || 0;
+            const leverage = parseFloat(document.getElementById('leverage').value) || 1;
+            const marginMode = document.getElementById('margin_mode').value;
+            
+            // Skip calculations if we're missing essential values
+            if (price === 0) return;
+            
+            // Simple liquidation calculation
+            let liquidationPrice;
+            if (side === 'buy') {
+                // For long positions, liquidation price is below entry
+                liquidationPrice = price * (1 - (1 / leverage) * 0.95);
+            } else {
+                // For short positions, liquidation price is above entry
+                liquidationPrice = price * (1 + (1 / leverage) * 0.95);
+            }
+            
+            // Display the liquidation price
+            document.getElementById('liquidation_price').textContent = liquidationPrice.toFixed(2);
+            
+            // Calculate distance to liquidation as percentage
+            const distancePercentage = Math.abs((liquidationPrice - price) / price * 100);
+            
+            // Update liquidation indicator
+            const indicatorWidth = Math.min(100, (10 / distancePercentage) * 100);
+            document.getElementById('liquidation_indicator').style.width = `${indicatorWidth}%`;
+        }
+        
+        // Function to fetch ticker data for a symbol
+        function fetchTickerData(symbol) {
+            if (!symbol) return;
+            
+            document.getElementById('refreshPrice').innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Loading...';
+            
+            fetch(`/api/ticker/${symbol}`)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('refreshPrice').innerHTML = '<i class="bi bi-arrow-clockwise"></i> Get Price';
+                    
+                    if (data.error) {
+                        console.error(data.error);
+                        return;
+                    }
+                    
+                    const price = data.last;
+                    document.getElementById('price').value = price;
+                    
+                    // Set reasonable default values for stop loss and take profit based on side
+                    const side = document.querySelector('input[name="side"]:checked').value;
+                    const stopLossInput = document.getElementById('stop_loss');
+                    const takeProfitInput = document.getElementById('take_profit');
+                    
+                    if (side === 'buy') {
+                        // For long position: stop loss 2% below, take profit 3% above
+                        stopLossInput.value = (price * 0.98).toFixed(2);
+                        takeProfitInput.value = (price * 1.03).toFixed(2);
+                    } else {
+                        // For short position: stop loss 2% above, take profit 3% below
+                        stopLossInput.value = (price * 1.02).toFixed(2);
+                        takeProfitInput.value = (price * 0.97).toFixed(2);
+                    }
+                    
+                    // Update the calculations to show PnL and liquidation price
+                    updateCalculations();
+                })
+                .catch(error => {
+                    document.getElementById('refreshPrice').innerHTML = '<i class="bi bi-arrow-clockwise"></i> Get Price';
+                    console.error('Error fetching ticker data:', error);
+                });
+        }
+
+        // Handle size unit toggle (USD vs Contracts)
+        let inContractMode = false;
+        let currentPrice = 0;
+        let lastKnownUsdAmount = 1;
+        let lastKnownContractAmount = 0;
+
+        function toggleSizeUnit() {
+            const sizeUnitToggle = document.getElementById('sizeUnitToggle');
+            const sizeUnitLabel = document.getElementById('sizeUnitLabel');
+            const amountInput = document.getElementById('amount');
+            const amountSlider = document.getElementById('amount_slider');
+            const amountPrefix = document.getElementById('amountPrefix');
+            const price = parseFloat(document.getElementById('price').value) || 0;
+            
+            // Toggle between USD and Contracts
+            inContractMode = sizeUnitToggle.checked;
+            
+            if (inContractMode) {
+                // Switching to Contracts mode
+                sizeUnitLabel.textContent = 'Contracts';
+                amountPrefix.textContent = '#';
+                
+                if (price > 0) {
+                    // Convert current USD amount to contracts
+                    lastKnownUsdAmount = parseFloat(amountInput.value);
+                    const contractAmount = lastKnownUsdAmount / price;
+                    lastKnownContractAmount = contractAmount;
+                    amountInput.value = contractAmount.toFixed(5);
+                    
+                    // Update the slider max to appropriate contract value
+                    const maxContractSize = parseFloat('{{ status.max_position_size }}') / price;
+                    amountSlider.max = maxContractSize;
+                    amountSlider.value = contractAmount;
+                } else {
+                    // If we don't have a price, just use the last known contract amount
+                    amountInput.value = lastKnownContractAmount > 0 ? lastKnownContractAmount.toFixed(5) : '0.00001';
+                }
+            } else {
+                // Switching to USD mode
+                sizeUnitLabel.textContent = 'USD';
+                amountPrefix.textContent = ';
+                
+                if (price > 0) {
+                    // Convert current contract amount to USD
+                    lastKnownContractAmount = parseFloat(amountInput.value);
+                    const usdAmount = lastKnownContractAmount * price;
+                    lastKnownUsdAmount = usdAmount;
+                    amountInput.value = usdAmount.toFixed(2);
+                    
+                    // Reset slider to USD max
+                    amountSlider.max = parseFloat('{{ status.max_position_size }}');
+                    amountSlider.value = usdAmount;
+                } else {
+                    // If we don't have a price, just use the last known USD amount
+                    amountInput.value = lastKnownUsdAmount;
+                }
+            }
+            
+            // Update calculations
+            updateCalculations();
+        }
+        
+        // Function to refresh data via AJAX
+        let refreshInterval;
+        let refreshIntervalSeconds = 30;
+        
+        function refreshData() {
+            const refreshButton = document.getElementById('manualRefresh');
+            refreshButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Refreshing...';
+            refreshButton.disabled = true;
+            
+            fetch('/api/refresh_data')
+                .then(response => response.json())
+                .then(data => {
+                    refreshButton.innerHTML = '<i class="bi bi-arrow-repeat"></i> Refresh Now';
+                    refreshButton.disabled = false;
+                    
+                    if (data.error) {
+                        console.error(data.error);
+                        return;
+                    }
+                    
+                    // Update positions
+                    updatePositionsDisplay(data.positions);
+                    
+                    // Update pending orders
+                    updatePendingOrdersDisplay(data.pending_orders);
+                    
+                    // Update trade history
+                    updateTradeHistoryDisplay(data.status.trades_history);
+                    
+                    // Update status
+                    updateStatusDisplay(data.status);
+                    
+                    // Update last refresh time
+                    const now = new Date();
+                    document.getElementById('lastUpdateTime').textContent = `Last updated: ${now.toLocaleTimeString()}`;
+                })
+                .catch(error => {
+                    refreshButton.innerHTML = '<i class="bi bi-arrow-repeat"></i> Refresh Now';
+                    refreshButton.disabled = false;
+                    console.error('Error refreshing data:', error);
+                });
+        }
+        
+        // Function to update the positions display with new data
+        function updatePositionsDisplay(positions) {
+            const container = document.getElementById('positions-container');
+            if (!container) return;
+            
+            if (!positions || positions.length === 0) {
+                container.innerHTML = `
+                    <div class="alert alert-secondary">
+                        <i class="bi bi-info-circle me-2"></i> No open positions
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '<div class="row">';
+            
+            for (const position of positions) {
+                html += `
+                    <div class="col-md-6 mb-3">
+                        <div class="card position-card ${position.side === 'short' ? 'short' : ''}">
+                            <div class="card-body">
+                                <h6 class="card-title">${position.symbol}</h6>
+                                <p class="mb-1"><strong>Side:</strong> 
+                                    ${position.side === 'long' 
+                                        ? '<span class="badge bg-success">LONG</span>' 
+                                        : '<span class="badge bg-danger">SHORT</span>'}
+                                </p>
+                                <p class="mb-1"><strong>Size:</strong> ${position.contracts}</p>
+                                <p class="mb-1"><strong>Entry Price:</strong> ${position.entryPrice || 'N/A'}</p>
+                                <p class="mb-1"><strong>Leverage:</strong> ${position.leverage || 'N/A'}x</p>
+                                <p class="mb-1"><strong>Unrealized PnL:</strong> 
+                                    ${position.unrealizedPnl !== undefined ? 
+                                        (parseFloat(position.unrealizedPnl) > 0 
+                                            ? `<span class="profit">+${position.unrealizedPnl}</span>` 
+                                            : `<span class="loss">${position.unrealizedPnl}</span>`)
+                                        : '<span>N/A</span>'}
+                                </p>
+                                <form action="/close_position" method="post" class="mt-2">
+                                    <input type="hidden" name="symbol" value="${position.symbol}">
+                                    <button type="submit" class="btn btn-danger btn-sm">Close Position</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += '</div>';
+            container.innerHTML = html;
+        }
+        
+        // Function to update the pending orders display with new data
+        function updatePendingOrdersDisplay(pendingOrders) {
+            const container = document.getElementById('pending-orders-container');
+            if (!container) return;
+            
+            if (!pendingOrders || pendingOrders.length === 0) {
+                container.innerHTML = `
+                    <div class="alert alert-secondary">
+                        <i class="bi bi-info-circle me-2"></i> No pending orders
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = `
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Symbol</th>
+                                <th>Type</th>
+                                <th>Side</th>
+                                <th>Amount</th>
+                                <th>Price</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            for (const order of pendingOrders) {
+                html += `
+                    <tr>
+                        <td>${order.time}</td>
+                        <td>${order.symbol}</td>
+                        <td>${order.type}</td>
+                        <td>
+                            ${order.side === 'buy' 
+                                ? '<span class="badge bg-success">BUY</span>' 
+                                : '<span class="badge bg-danger">SELL</span>'}
+                        </td>
+                        <td>${order.amount}</td>
+                        <td>${order.price}</td>
+                        <td>
+                            <form action="/cancel_order/${order.id}" method="post">
+                                <button type="submit" class="btn btn-danger btn-sm">Cancel</button>
+                            </form>
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        }
+        
+        // Function to update the trade history display with new data
+        function updateTradeHistoryDisplay(tradesHistory) {
+            const container = document.getElementById('trade-history-container');
+            if (!container) return;
+            
+            if (!tradesHistory || tradesHistory.length === 0) {
+                container.innerHTML = `
+                    <div class="alert alert-secondary">
+                        <i class="bi bi-info-circle me-2"></i> No trade history available
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = `
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Symbol</th>
+                                <th>Side</th>
+                                <th>Size</th>
+                                <th>Price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            for (const trade of tradesHistory) {
+                html += `
+                    <tr>
+                        <td>${trade.time}</td>
+                        <td>${trade.symbol}</td>
+                        <td>
+                            ${trade.side === 'buy' 
+                                ? '<span class="badge bg-success">BUY</span>' 
+                                : '<span class="badge bg-danger">SELL</span>'}
+                        </td>
+                        <td>${trade.amount}</td>
+                        <td>${trade.price}</td>
+                    </tr>
+                `;
+            }
+            
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        }
+        
+        // Function to update the status display with new data
+        function updateStatusDisplay(status) {
+            // Update daily PnL
+            const dailyPnlElement = document.querySelector('p:contains("Daily PnL") span');
+            if (dailyPnlElement) {
+                if (status.daily_pnl > 0) {
+                    dailyPnlElement.className = 'profit';
+                    dailyPnlElement.textContent = `+${status.daily_pnl}`;
+                } else if (status.daily_pnl < 0) {
+                    dailyPnlElement.className = 'loss';
+                    dailyPnlElement.textContent = `${status.daily_pnl}`;
+                } else {
+                    dailyPnlElement.className = '';
+                    dailyPnlElement.textContent = `${status.daily_pnl}`;
+                }
+            }
+            
+            // Update trades count
+            const tradesCountElement = document.querySelector('p:contains("Trades Today")');
+            if (tradesCountElement) {
+                tradesCountElement.innerHTML = `<strong>Trades Today:</strong> ${status.daily_trade_count} / ${status.max_trades_per_day}`;
+            }
+            
+            // Update can trade status
+            const canTradeElement = document.querySelector('p:contains("Can Trade") span');
+            if (canTradeElement) {
+                if (status.can_trade) {
+                    canTradeElement.className = 'badge bg-success';
+                    canTradeElement.textContent = 'Yes';
+                } else {
+                    canTradeElement.className = 'badge bg-danger';
+                    canTradeElement.textContent = 'No';
+                }
+            }
+            
+            // Update status message
+            const statusMessageElement = document.querySelector('p:contains("Status:")');
+            if (statusMessageElement) {
+                statusMessageElement.innerHTML = `<strong>Status:</strong> ${status.status_message}`;
+            }
+            
+            // Update last trade time
+            const lastTradeElement = document.querySelector('p:contains("Last Trade:")');
+            if (lastTradeElement) {
+                lastTradeElement.innerHTML = `<strong>Last Trade:</strong> ${status.last_trade_time || 'None'}`;
+            }
+            
+            // Update cooldown ends
+            const cooldownElement = document.querySelector('p:contains("Cooldown Ends:")');
+            if (cooldownElement) {
+                cooldownElement.innerHTML = `<strong>Cooldown Ends:</strong> ${status.cooldown_ends || 'N/A'}`;
+            }
+        }
+
+        // Event Listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Handle refresh price button click
+            const refreshPriceBtn = document.getElementById('refreshPrice');
+            if (refreshPriceBtn) {
+                refreshPriceBtn.addEventListener('click', function() {
+                    const symbol = document.getElementById('symbol').value;
+                    fetchTickerData(symbol);
+                });
+            }
+            
+            // Handle size unit toggle
+            const sizeUnitToggle = document.getElementById('sizeUnitToggle');
+            if (sizeUnitToggle) {
+                sizeUnitToggle.addEventListener('change', toggleSizeUnit);
+            }
+            
+            // Handle amount slider input
+            const amountSlider = document.getElementById('amount_slider');
+            const amountInput = document.getElementById('amount');
+            if (amountSlider && amountInput) {
+                amountSlider.addEventListener('input', function() {
+                    amountInput.value = this.value;
+                    updateCalculations();
+                });
+                
+                amountInput.addEventListener('input', function() {
+                    amountSlider.value = this.value;
+                    updateCalculations();
+                });
+            }
+            
+            // Handle size presets
+            const sizePresets = document.querySelectorAll('.size-preset');
+            sizePresets.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const percentage = parseInt(this.dataset.value) / 100;
+                    const maxSize = parseFloat('{{ status.max_position_size }}');
+                    const newSize = maxSize * percentage;
+                    
+                    amountInput.value = newSize.toFixed(2);
+                    amountSlider.value = newSize;
+                    updateCalculations();
+                });
+            });
+            
+            // Handle side change
+            const sideButtons = document.querySelectorAll('input[name="side"]');
+            sideButtons.forEach(btn => {
+                btn.addEventListener('change', function() {
+                    // If we have a price, update stop loss and take profit defaults
+                    const price = parseFloat(document.getElementById('price').value);
+                    if (price > 0) {
+                        const stopLossInput = document.getElementById('stop_loss');
+                        const takeProfitInput = document.getElementById('take_profit');
+                        
+                        if (this.value === 'buy') {
+                            // For long position: stop loss 2% below, take profit 3% above
+                            stopLossInput.value = (price * 0.98).toFixed(2);
+                            takeProfitInput.value = (price * 1.03).toFixed(2);
+                        } else {
+                            // For short position: stop loss 2% above, take profit 3% below
+                            stopLossInput.value = (price * 1.02).toFixed(2);
+                            takeProfitInput.value = (price * 0.97).toFixed(2);
+                        }
+                    }
+                    
+                    updateCalculations();
+                });
+            });
+            
+            // Handle order type change
+            const orderTypeSelect = document.getElementById('order_type');
+            if (orderTypeSelect) {
+                orderTypeSelect.addEventListener('change', function() {
+                    const priceInput = document.getElementById('price');
+                    const postOnlyCheckbox = document.getElementById('post_only');
+                    
+                    if (this.value === 'market') {
+                        priceInput.required = false;
+                        postOnlyCheckbox.disabled = true;
+                        postOnlyCheckbox.checked = false;
+                    } else {
+                        priceInput.required = true;
+                        postOnlyCheckbox.disabled = false;
+                    }
+                });
+            }
+            
+            // Handle inputs that affect PnL calculations
+            const calculationInputs = ['price', 'stop_loss', 'take_profit', 'leverage'];
+            calculationInputs.forEach(id => {
+                const input = document.getElementById(id);
+                if (input) {
+                    input.addEventListener('input', updateCalculations);
+                }
+            });
+            
+            // Setup auto-refresh
+            const autoRefreshToggle = document.getElementById('autoRefreshToggle');
+            if (autoRefreshToggle) {
+                autoRefreshToggle.addEventListener('change', function() {
+                    const refreshStatus = document.getElementById('refreshStatus');
+                    
+                    if (this.checked) {
+                        // Enable auto refresh
+                        refreshInterval = setInterval(refreshData, refreshIntervalSeconds * 1000);
+                        refreshStatus.innerHTML = `<span class="status-indicator status-active"></span> Active (${refreshIntervalSeconds}s)`;
+                    } else {
+                        // Disable auto refresh
+                        clearInterval(refreshInterval);
+                        refreshStatus.innerHTML = `<span class="status-indicator status-inactive"></span> Inactive`;
+                    }
+                });
+                
+                // Handle refresh interval change
+                const refreshIntervalLinks = document.querySelectorAll('.refresh-interval');
+                refreshIntervalLinks.forEach(link => {
+                    link.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        
+                        refreshIntervalSeconds = parseInt(this.dataset.interval);
+                        document.getElementById('refreshInterval').textContent = `${refreshIntervalSeconds}s`;
+                        
+                        // Reset the interval if active
+                        if (autoRefreshToggle.checked) {
+                            clearInterval(refreshInterval);
+                            refreshInterval = setInterval(refreshData, refreshIntervalSeconds * 1000);
+                            document.getElementById('refreshStatus').innerHTML = `<span class="status-indicator status-active"></span> Active (${refreshIntervalSeconds}s)`;
+                        }
+                    });
+                });
+                
+                // Handle manual refresh
+                const manualRefreshBtn = document.getElementById('manualRefresh');
+                if (manualRefreshBtn) {
+                    manualRefreshBtn.addEventListener('click', refreshData);
+                }
+                
+                // Start auto-refresh if enabled by default
+                if (autoRefreshToggle.checked) {
+                    refreshInterval = setInterval(refreshData, refreshIntervalSeconds * 1000);
+                }
+            }
+            
+            // Fetch initial price if symbol is set
+            const symbol = document.getElementById('symbol').value;
+            if (symbol) {
+                fetchTickerData(symbol);
+            }
+        });
+    </script>
+</body>
+</html>

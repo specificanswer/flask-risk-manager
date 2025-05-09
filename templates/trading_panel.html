@@ -1,0 +1,171 @@
+<!-- trading_panel.html - Updated with position size slider and SL/TP adjustment -->
+<div class="trading-panel">
+  <div class="panel-section order-entry">
+    <div class="section-header">
+      <h3>New Order</h3>
+    </div>
+    
+    <form id="order-form" class="order-form">
+      <!-- Symbol Selection -->
+      <div class="form-group">
+        <label for="symbol">Symbol</label>
+        <div class="input-with-icon">
+          <select id="symbol" name="symbol">
+            {% for symbol in symbols %}
+              <option value="{{ symbol }}">{{ symbol }}</option>
+            {% endfor %}
+          </select>
+          <button type="button" id="refresh-price" class="icon-button">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Order Type -->
+      <div class="form-group">
+        <label>Order Type</label>
+        <div class="toggle-buttons">
+          <button type="button" data-value="market" class="toggle-button active">Market</button>
+          <button type="button" data-value="limit" class="toggle-button">Limit</button>
+          <input type="hidden" name="order_type" id="order-type-input" value="market">
+        </div>
+      </div>
+      
+      <!-- Price (for limit orders) -->
+      <div class="form-group price-group" style="display: none;">
+        <label for="price">Price</label>
+        <input type="number" id="price" name="price" step="0.01" placeholder="Enter price">
+      </div>
+      
+      <!-- Side Selection -->
+      <div class="form-group">
+        <label>Side</label>
+        <div class="side-buttons">
+          <button type="button" data-value="buy" class="side-button buy active">Buy/Long</button>
+          <button type="button" data-value="sell" class="side-button sell">Sell/Short</button>
+          <input type="hidden" name="side" id="side-input" value="buy">
+        </div>
+      </div>
+      
+      <!-- Enhanced Position Size with 1% Increments Slider -->
+      <div class="form-group">
+        <label for="amount">Position Size: <span id="position-size-display">${{ status.max_position_size|default('100.00') }}</span> (<span id="position-size-percent">100%</span>)</label>
+        <div class="position-size-slider-container">
+          <input type="range" id="position-size-slider" min="1" max="100" step="1" value="100">
+          <div class="position-size-ticks">
+            <span>0%</span>
+            <span>25%</span>
+            <span>50%</span>
+            <span>75%</span>
+            <span>100%</span>
+          </div>
+        </div>
+        <input type="hidden" id="amount" name="amount" value="{{ status.max_position_size|default('100.00') }}">
+      </div>
+      
+      <!-- Advanced Options Section (Always Visible) -->
+      <div class="advanced-options">
+        <!-- Stop Loss -->
+        <div class="form-group">
+          <label for="stop_loss">Stop Loss</label>
+          <input type="number" id="stop_loss" name="stop_loss" step="0.01" placeholder="Stop price">
+        </div>
+        
+        <!-- Take Profit -->
+        <div class="form-group">
+          <label for="take_profit">Take Profit</label>
+          <input type="number" id="take_profit" name="take_profit" step="0.01" placeholder="Take profit price">
+        </div>
+        
+        <!-- Leverage -->
+        <div class="form-group">
+          <label for="leverage">Leverage</label>
+          <select id="leverage" name="leverage">
+            <option value="1">1x</option>
+            <option value="2">2x</option>
+            <option value="3">3x</option>
+            <option value="5" selected>5x</option>
+            <option value="10">10x</option>
+            <option value="20">20x</option>
+            <option value="50">50x</option>
+            <option value="100">100x</option>
+          </select>
+        </div>
+        
+        <!-- Risk Indicators -->
+        <div class="risk-indicators">
+          <div class="indicator">
+            <span class="indicator-label">R/R Ratio:</span>
+            <span class="indicator-value" id="risk-reward">1:1.00</span>
+          </div>
+          <div class="indicator">
+            <span class="indicator-label">Max Loss:</span>
+            <span class="indicator-value">$5.00</span>
+          </div>
+          <div class="indicator">
+            <span class="indicator-label">Cooldown:</span>
+            <span class="indicator-value">{{ status.cooldown_minutes|default('10') }} min</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Submit Button -->
+      <button type="submit" id="submit-order" class="submit-button buy">Place Buy Order</button>
+    </form>
+  </div>
+  
+  <div class="panel-section positions">
+    <div class="section-header">
+      <h3>Open Positions</h3>
+      <button type="button" id="refresh-positions" class="refresh-button">
+        <i class="bi bi-arrow-clockwise"></i>
+      </button>
+    </div>
+    
+    <div id="positions-container" class="positions-container">
+      <div class="loading">Loading positions...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Position Control Modal -->
+<div class="modal fade" id="positionControlModal" tabindex="-1" aria-labelledby="positionControlModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-light">
+      <div class="modal-header">
+        <h5 class="modal-title" id="positionControlModalLabel">Position Controls</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="position-control-form">
+          <input type="hidden" id="position-symbol" name="symbol">
+          <input type="hidden" id="position-side" name="side">
+          <input type="hidden" id="position-size" name="size">
+          
+          <div class="mb-3">
+            <label for="position-stop-loss" class="form-label">Stop Loss</label>
+            <input type="number" class="form-control" id="position-stop-loss" name="stop_loss" step="0.01">
+          </div>
+          
+          <div class="mb-3">
+            <label for="position-take-profit" class="form-label">Take Profit</label>
+            <input type="number" class="form-control" id="position-take-profit" name="take_profit" step="0.01">
+          </div>
+          
+          <div class="d-flex justify-content-between">
+            <div>
+              <button type="button" id="update-position-button" class="btn btn-primary">Update</button>
+            </div>
+            <div>
+              <button type="button" id="close-position-button" class="btn btn-danger">Close Position</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- You'll need to include your CSS and JavaScript files -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/trading_panel.css') }}">
+<script src="{{ url_for('static', filename='js/trading_panel.js') }}"></script>

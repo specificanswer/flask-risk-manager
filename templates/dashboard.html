@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block title %}Crypto Futures Trader - Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-lg-9">
+            <!-- Trading Panel -->
+            {% include 'trading_panel.html' %}
+        </div>
+        
+        <div class="col-lg-3">
+            <!-- Trading Status Card -->
+            <div class="card bg-dark mb-4">
+                <div class="card-header text-white">
+                    <h5 class="mb-0">Trading Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="status-item">
+                        <div class="status-label">Exchange</div>
+                        <div class="status-value">{{ status.exchange|upper }}</div>
+                    </div>
+                    
+                    <div class="status-item">
+                        <div class="status-label">Can Trade</div>
+                        <div class="status-value">
+                            {% if status.can_trade %}
+                                <span class="badge bg-success">Yes</span>
+                            {% else %}
+                                <span class="badge bg-danger">No</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="status-item">
+                        <div class="status-label">Status</div>
+                        <div class="status-value">{{ status.status_message }}</div>
+                    </div>
+                    
+                    <div class="status-item">
+                        <div class="status-label">Trades Today</div>
+                        <div class="status-value">{{ status.daily_trade_count }} / {{ status.max_trades_per_day }}</div>
+                    </div>
+                    
+                    <div class="status-item">
+                        <div class="status-label">Daily PnL</div>
+                        <div class="status-value">
+                            {% if status.daily_pnl > 0 %}
+                                <span class="text-success">+${{ status.daily_pnl }}</span>
+                            {% elif status.daily_pnl < 0 %}
+                                <span class="text-danger">${{ status.daily_pnl }}</span>
+                            {% else %}
+                                ${{ status.daily_pnl }}
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="status-item">
+                        <div class="status-label">Daily Loss Limit</div>
+                        <div class="status-value">${{ status.daily_loss_limit }}</div>
+                    </div>
+                    
+                    <div class="status-item">
+                        <div class="status-label">Max Position Size</div>
+                        <div class="status-value">${{ status.max_position_size }}</div>
+                    </div>
+                    
+                    <div class="status-item">
+                        <div class="status-label">Last Trade</div>
+                        <div class="status-value">{{ status.last_trade_time|default('None') }}</div>
+                    </div>
+                    
+                    <div class="status-item">
+                        <div class="status-label">Cooldown Ends</div>
+                        <div class="status-value">{{ status.cooldown_ends|default('N/A') }}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Additional Info Card -->
+            <div class="card bg-dark mb-4">
+                <div class="card-header text-white">
+                    <h5 class="mb-0">Risk Management</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Daily Loss Limit:</strong> Trading is stopped when daily losses reach ${{ status.daily_loss_limit }}</p>
+                    <p><strong>Cooldown Period:</strong> {{ status.cooldown_minutes|default('10') }} minutes between trades</p>
+                    <p><strong>Maximum Trades:</strong> {{ status.max_trades_per_day }} trades per day</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Additional styles for dashboard */
+.status-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #333;
+}
+
+.status-item:last-child {
+    border-bottom: none;
+}
+
+.status-label {
+    color: #9e9e9e;
+    font-weight: 500;
+}
+
+.status-value {
+    font-weight: 600;
+    color: #e0e0e0;
+}
+</style>
+{% endblock %}
