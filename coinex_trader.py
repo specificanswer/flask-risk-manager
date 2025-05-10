@@ -19,7 +19,6 @@ class CryptoFuturesTrader:
         self.daily_pnl = 0.0
         self.last_trade_time = None
         self.trades_history = []
-        self.pending_orders = []  # Track pending orders separately
         self.config_path = config_path
         self.exchange_id = exchange_id.lower()
         
@@ -76,8 +75,7 @@ class CryptoFuturesTrader:
                     self.daily_pnl = state.get('daily_pnl', 0.0)
                     self.last_trade_time = datetime.fromisoformat(state.get('last_trade_time')) if state.get('last_trade_time') else None
                     self.trades_history = state.get('trades_history', [])
-                    self.pending_orders = state.get('pending_orders', [])  # Load pending orders
-                    print(f"Loaded today's state: {self.daily_trade_count} trades, ${self.daily_pnl} PnL, {len(self.pending_orders)} pending orders")
+                    print(f"Loaded today's state: {self.daily_trade_count} trades, ${self.daily_pnl} PnL")
                 else:
                     print("New trading day, resetting state")
             except Exception as e:
@@ -90,8 +88,7 @@ class CryptoFuturesTrader:
             'daily_trade_count': self.daily_trade_count,
             'daily_pnl': self.daily_pnl,
             'last_trade_time': self.last_trade_time.isoformat() if self.last_trade_time else None,
-            'trades_history': self.trades_history,
-            'pending_orders': self.pending_orders  # Save pending orders
+            'trades_history': self.trades_history
         }
         
         with open(self.config_path, 'w') as f:
@@ -106,7 +103,6 @@ class CryptoFuturesTrader:
             self.daily_trade_count = 0
             self.daily_pnl = 0.0
             self.trades_history = []
-            self.pending_orders = []  # Reset pending orders
             print("New day detected, reset daily counters")
         
         # Check max trades per day
@@ -241,47 +237,14 @@ class CryptoFuturesTrader:
             # Place the actual order
             if order_type == 'limit':
                 order = self.exchange.create_order(formatted_symbol, order_type, side, quantity, price, order_params)
-                
-                # For limit orders, add to pending orders but don't increment trade count yet
-                pending_order = {
-                    "id": order.get('id', 'unknown'),
-                    "time": datetime.now().isoformat(),
-                    "symbol": formatted_symbol,
-                    "side": side,
-                    "amount": amount,
-                    "quantity": quantity,
-                    "price": price,
-                    "stop_loss": stop_loss,
-                    "take_profit": take_profit,
-                    "leverage": leverage,
-                    "margin_mode": margin_mode,
-                    "post_only": post_only,
-                    "type": order_type
-                }
-                self.pending_orders.append(pending_order)
-                self._save_state()
-                
-                results = {
-                    "success": True, 
-                    "order": order, 
-                    "message": f"Successfully placed {side} limit order for {formatted_symbol}, tracking as pending"
-                }
-                
-                # For limit orders, we'll wait until they're filled to count as a trade
-                # and to set stop loss/take profit orders, so return early
-                return results
             else:
-                # For market orders, execute immediately
                 order = self.exchange.create_order(formatted_symbol, order_type, side, quantity, None, order_params)
-                
-                # For market orders, wait a moment for the position to be established
-                time.sleep(1)  # Brief delay to ensure position exists
-                
-                results = {
-                    "success": True, 
-                    "order": order, 
-                    "message": f"Successfully placed {side} market order for {formatted_symbol}"
-                }
+            
+            results = {
+                "success": True, 
+                "order": order, 
+                "message": f"Successfully placed {side} order for {formatted_symbol}"
+            }
             
             # Handle stop loss (always as market order)
             if stop_loss:
@@ -324,29 +287,28 @@ class CryptoFuturesTrader:
                     results["take_profit_error"] = str(e)
                     results["message"] += f". Failed to set take profit: {str(e)}"
             
-            # Update state for market orders (which are considered executed immediately)
-            if order_type == 'market':
-                self.last_trade_time = datetime.now()
-                self.daily_trade_count += 1
-                
-                # Record trade
-                trade_record = {
-                    "time": self.last_trade_time.isoformat(),
-                    "symbol": formatted_symbol,
-                    "side": side,
-                    "amount": amount,
-                    "price": price,
-                    "stop_loss": stop_loss,
-                    "take_profit": take_profit,
-                    "leverage": leverage,
-                    "margin_mode": margin_mode,
-                    "post_only": post_only,
-                    "order_id": order.get('id', 'unknown')
-                }
-                self.trades_history.append(trade_record)
-                
-                # Save state
-                self._save_state()
+            # Update state
+            self.last_trade_time = datetime.now()
+            self.daily_trade_count += 1
+            
+            # Record trade
+            trade_record = {
+                "time": self.last_trade_time.isoformat(),
+                "symbol": formatted_symbol,
+                "side": side,
+                "amount": amount,
+                "price": price,
+                "stop_loss": stop_loss,
+                "take_profit": take_profit,
+                "leverage": leverage,
+                "margin_mode": margin_mode,
+                "post_only": post_only,
+                "order_id": order.get('id', 'unknown')
+            }
+            self.trades_history.append(trade_record)
+            
+            # Save state
+            self._save_state()
             
             return results
             
@@ -361,160 +323,6 @@ class CryptoFuturesTrader:
                 return {"success": False, "message": f"Symbol error. The pair {symbol} may not be available for futures trading. Error: {error_msg}"}
             else:
                 return {"success": False, "message": f"Error placing trade: {self.exchange_id} {error_msg}"}
-    
-    def check_order_status(self, order_id: str):
-        """Check the status of an order and handle accordingly."""
-        try:
-            order = self.exchange.fetch_order(order_id)
-            
-            # If order is filled, move it from pending to completed
-            if order['status'] == 'closed' or order['filled'] == order['amount']:
-                # Find the pending order
-                pending_order = next((o for o in self.pending_orders if o['id'] == order_id), None)
-                
-                if pending_order:
-                    # Remove from pending orders
-                    self.pending_orders = [o for o in self.pending_orders if o['id'] != order_id]
-                    
-                    # Add to completed trades and increment counter
-                    self.last_trade_time = datetime.now()
-                    self.daily_trade_count += 1
-                    
-                    # Create trade record
-                    trade_record = {
-                        "time": self.last_trade_time.isoformat(),
-                        "symbol": pending_order["symbol"],
-                        "side": pending_order["side"],
-                        "amount": pending_order["amount"],
-                        "price": order.get('price', pending_order.get('price')),
-                        "stop_loss": pending_order.get("stop_loss"),
-                        "take_profit": pending_order.get("take_profit"),
-                        "leverage": pending_order.get("leverage"),
-                        "margin_mode": pending_order.get("margin_mode"),
-                        "post_only": pending_order.get("post_only"),
-                        "order_id": order_id
-                    }
-                    self.trades_history.append(trade_record)
-                    
-                    # Now try to set stop loss and take profit
-                    if pending_order.get("stop_loss") or pending_order.get("take_profit"):
-                        self.set_position_orders(
-                            pending_order["symbol"],
-                            pending_order["side"],
-                            pending_order["quantity"],
-                            pending_order.get("stop_loss"),
-                            pending_order.get("take_profit"),
-                            pending_order.get("post_only", False)
-                        )
-                    
-                    self._save_state()
-                    return {"status": "filled", "order": order}
-            
-            # If order was canceled, remove from pending
-            elif order['status'] == 'canceled':
-                self.pending_orders = [o for o in self.pending_orders if o['id'] != order_id]
-                self._save_state()
-                return {"status": "canceled", "order": order}
-            
-            # Otherwise, order is still open
-            return {"status": "open", "order": order}
-            
-        except Exception as e:
-            print(f"Error checking order status: {str(e)}")
-            return {"status": "error", "message": str(e)}
-    
-    def check_pending_orders(self):
-        """Check all pending orders and update their status."""
-        results = []
-        
-        for pending_order in list(self.pending_orders):  # Create a copy to safely modify during iteration
-            result = self.check_order_status(pending_order['id'])
-            results.append(result)
-        
-        return results
-    
-    def cancel_order(self, order_id: str):
-        """Cancel a pending order and remove from tracking."""
-        try:
-            # Find the pending order first
-            pending_order = next((o for o in self.pending_orders if o['id'] == order_id), None)
-            
-            if not pending_order:
-                return {"success": False, "message": f"Order {order_id} not found in pending orders"}
-            
-            # Cancel the order on the exchange
-            result = self.exchange.cancel_order(order_id, pending_order['symbol'])
-            
-            # Remove from pending orders
-            self.pending_orders = [o for o in self.pending_orders if o['id'] != order_id]
-            self._save_state()
-            
-            return {"success": True, "message": f"Order {order_id} canceled successfully", "result": result}
-            
-        except Exception as e:
-            error_msg = str(e)
-            return {"success": False, "message": f"Error canceling order: {error_msg}"}
-    
-    def set_position_orders(self, symbol: str, side: str, quantity: float, 
-                           stop_loss: float = None, take_profit: float = None,
-                           post_only: bool = False):
-        """Set stop loss and take profit for an existing position."""
-        formatted_symbol = self.format_symbol_for_exchange(symbol)
-        results = {"success": True, "message": "Position orders set"}
-        
-        try:
-            # Make sure position exists first
-            positions = self.get_open_positions()
-            position = next((p for p in positions if p['symbol'] == formatted_symbol), None)
-            
-            if not position:
-                return {"success": False, "message": f"No open position found for {formatted_symbol}"}
-            
-            # Handle stop loss (always as market order)
-            if stop_loss:
-                stop_side = 'sell' if side == 'buy' else 'buy'
-                try:
-                    stop_params = {'stopPrice': stop_loss, 'reduceOnly': True}
-                    stop_order = self.exchange.create_order(
-                        formatted_symbol,
-                        'stop_market', 
-                        stop_side,
-                        quantity,
-                        None,
-                        stop_params
-                    )
-                    results["stop_loss_order"] = stop_order
-                    results["message"] += f" with stop loss at {stop_loss}"
-                except Exception as e:
-                    results["stop_loss_error"] = str(e)
-                    results["message"] += f". Failed to set stop loss: {str(e)}"
-            
-            # Handle take profit (always as limit order)
-            if take_profit:
-                tp_side = 'sell' if side == 'buy' else 'buy'
-                try:
-                    tp_params = {'reduceOnly': True}
-                    if post_only:
-                        tp_params['postOnly'] = True
-                    
-                    tp_order = self.exchange.create_order(
-                        formatted_symbol,
-                        'limit',
-                        tp_side,
-                        quantity,
-                        take_profit,
-                        tp_params
-                    )
-                    results["take_profit_order"] = tp_order
-                    results["message"] += f" and take profit at {take_profit}"
-                except Exception as e:
-                    results["take_profit_error"] = str(e)
-                    results["message"] += f". Failed to set take profit: {str(e)}"
-            
-            return results
-            
-        except Exception as e:
-            return {"success": False, "message": f"Error setting position orders: {str(e)}"}
     
     def update_pnl(self, trade_pnl: float):
         """
@@ -536,9 +344,6 @@ class CryptoFuturesTrader:
         """Get current trading status and risk metrics."""
         can_trade_result = self.can_trade()
         
-        # Check pending orders status
-        self.check_pending_orders()
-        
         return {
             "exchange": self.exchange_id,
             "date": datetime.now().isoformat(),
@@ -551,9 +356,7 @@ class CryptoFuturesTrader:
             "daily_loss_limit": self.max_daily_loss,
             "max_position_size": self.max_position_size,
             "last_trade_time": self.last_trade_time.isoformat() if self.last_trade_time else None,
-            "cooldown_ends": (self.last_trade_time + timedelta(minutes=self.cooldown_minutes)).isoformat() if self.last_trade_time else None,
-            "pending_orders": self.pending_orders,
-            "trades_history": self.trades_history
+            "cooldown_ends": (self.last_trade_time + timedelta(minutes=self.cooldown_minutes)).isoformat() if self.last_trade_time else None
         }
     
     def get_open_positions(self) -> List[Dict]:
@@ -562,11 +365,10 @@ class CryptoFuturesTrader:
             if self.exchange_id == 'coinex':
                 # CoinEx might require specific method or endpoint
                 positions = self.exchange.fetch_positions()
-                # Only return positions with non-zero size
-                return [p for p in positions if abs(float(p.get('contracts', 0))) > 0]
+                return [p for p in positions if float(p.get('contracts', 0)) > 0]
             else:
                 positions = self.exchange.fetch_positions()
-                return [p for p in positions if abs(float(p.get('contracts', 0))) > 0]
+                return [p for p in positions if float(p.get('contracts', 0)) > 0]
         except Exception as e:
             print(f"Error fetching positions: {e}")
             return []
@@ -635,14 +437,6 @@ class CryptoFuturesTrader:
             "max_position_size": self.max_position_size
         }
 
-    def get_pending_orders(self) -> List[Dict]:
-        """Get all pending orders with current status."""
-        # First check and update all pending orders
-        self.check_pending_orders()
-        
-        # Return the current list
-        return self.pending_orders
-
 
 def main():
     parser = argparse.ArgumentParser(description='Crypto Futures Trader with Risk Management')
@@ -669,97 +463,8 @@ def main():
     trade_parser.add_argument('--post-only', action='store_true', help='Make order post-only (limit orders only)')
     
     # Close position command
-def close_position(self, symbol: str, auto_liquidation: bool = False) -> Dict:
-    """Close an open position for a symbol."""
-    try:
-        # Format symbol for the exchange
-        formatted_symbol = self.format_symbol_for_exchange(symbol)
-        
-        # Get positions first to see if it exists
-        positions = self.get_open_positions()
-        
-        # Try to match the position exactly
-        position = next((p for p in positions if p['symbol'] == formatted_symbol), None)
-        
-        # If not found, try different format variations
-        if not position:
-            # Try without USDT suffix if it has one
-            if formatted_symbol.endswith('USDT'):
-                base_symbol = formatted_symbol[:-4]
-                for p in positions:
-                    if p['symbol'].startswith(base_symbol):
-                        position = p
-                        formatted_symbol = p['symbol']  # Use the correct symbol format
-                        break
-            
-            # Try with :USDT suffix
-            if not position and ':USDT' not in formatted_symbol:
-                test_symbol = f"{formatted_symbol}:USDT"
-                position = next((p for p in positions if p['symbol'] == test_symbol), None)
-                if position:
-                    formatted_symbol = position['symbol']
-            
-            # Try with -USDT format
-            if not position and '-USDT' not in formatted_symbol:
-                test_symbol = f"{formatted_symbol}-USDT"
-                position = next((p for p in positions if p['symbol'] == test_symbol), None)
-                if position:
-                    formatted_symbol = position['symbol']
-        
-        if not position:
-            return {"success": False, "message": f"No open position found for {symbol} (tried formats: {formatted_symbol}, {symbol}:USDT, {symbol}-USDT)"}
-        
-        # Cancel any existing SL/TP orders first
-        try:
-            open_orders = self.exchange.fetch_open_orders(formatted_symbol)
-            for order in open_orders:
-                # Only cancel stop loss and take profit orders
-                if order.get('type') in ['stop', 'stop_market', 'limit'] and order.get('reduceOnly', False):
-                    self.exchange.cancel_order(order['id'], formatted_symbol)
-                    print(f"Canceled SL/TP order: {order['id']}")
-        except Exception as e:
-            print(f"Warning: Could not cancel SL/TP orders: {e}")
-        
-        # Determine close direction (opposite of position)
-        side = 'sell' if position['side'] == 'long' else 'buy'
-        amount = abs(float(position['contracts']))
-        
-        # Place closing order with exchange-specific parameters
-        if self.exchange_id == 'coinex':
-            order = self.exchange.create_order(
-                formatted_symbol, 
-                'market', 
-                side, 
-                amount, 
-                None, 
-                {'reduceOnly': True}
-            )
-        else:
-            order = self.exchange.create_order(
-                formatted_symbol, 
-                'market', 
-                side, 
-                amount, 
-                None, 
-                {'reduceOnly': True, 'type': 'future'}
-            )
-        
-        # If this was an auto-liquidation, log it separately
-        if auto_liquidation:
-            message = f"AUTO-LIQUIDATION: Position {formatted_symbol} liquidated at ${abs(float(position.get('unrealizedPnl', 0))):.2f} loss"
-            print(message)
-            # Could add additional tracking or notifications here
-        else:
-            message = f"Successfully closed position for {formatted_symbol}"
-        
-        return {"success": True, "order": order, "message": message, "auto_liquidation": auto_liquidation}
-        
-    except Exception as e:
-        return {"success": False, "message": f"Error closing position: {str(e)}"}
-    
-    # Cancel order command
-    cancel_parser = subparsers.add_parser('cancel', help='Cancel a pending order')
-    cancel_parser.add_argument('--order-id', type=str, required=True, help='Order ID to cancel')
+    close_parser = subparsers.add_parser('close', help='Close an open position')
+    close_parser.add_argument('--symbol', type=str, required=True, help='Trading pair to close')
     
     # Update PnL command
     pnl_parser = subparsers.add_parser('pnl', help='Update daily PnL')
@@ -767,9 +472,6 @@ def close_position(self, symbol: str, auto_liquidation: bool = False) -> Dict:
     
     # Positions command
     positions_parser = subparsers.add_parser('positions', help='Get open positions')
-    
-    # Pending orders command
-    pending_parser = subparsers.add_parser('pending', help='Get pending orders')
     
     # Update risk parameters command
     risk_parser = subparsers.add_parser('risk', help='Update risk parameters')
@@ -806,10 +508,6 @@ def close_position(self, symbol: str, auto_liquidation: bool = False) -> Dict:
         result = trader.close_position(args.symbol)
         print(json.dumps(result, indent=2))
     
-    elif args.command == 'cancel':
-        result = trader.cancel_order(args.order_id)
-        print(json.dumps(result, indent=2))
-    
     elif args.command == 'pnl':
         trader.update_pnl(args.amount)
         status = trader.get_trading_status()
@@ -818,10 +516,6 @@ def close_position(self, symbol: str, auto_liquidation: bool = False) -> Dict:
     elif args.command == 'positions':
         positions = trader.get_open_positions()
         print(json.dumps(positions, indent=2))
-    
-    elif args.command == 'pending':
-        pending_orders = trader.get_pending_orders()
-        print(json.dumps(pending_orders, indent=2))
     
     elif args.command == 'risk':
         trader.update_risk_parameters(
@@ -838,107 +532,3 @@ def close_position(self, symbol: str, auto_liquidation: bool = False) -> Dict:
 
 if __name__ == "__main__":
     main()
-def format_symbol_for_exchange(self, symbol: str) -> str:
-    """Format symbol according to exchange requirements with better handling of duplicate suffixes."""
-    # First, clean up the symbol in case it has duplicate suffixes
-    if ":USDT:USDT" in symbol:
-        symbol = symbol.replace(":USDT:USDT", ":USDT")
-    if "/USDT:USDT" in symbol:
-        symbol = symbol.replace("/USDT:USDT", "/USDT")
-    
-    # CoinEx uses specific symbol formats for futures/swaps
-    if self.exchange_id == 'coinex':
-        # Remove any existing suffixes first to clean the symbol
-        clean_symbol = symbol
-        for suffix in ['/USDT', ':USDT', '-USDT', 'USDT']:
-            if clean_symbol.endswith(suffix):
-                clean_symbol = clean_symbol[:-len(suffix)]
-                break
-        
-        # Now format according to exchange requirements
-        if '/' in symbol:
-            # Convert BTC/USDT to BTCUSDT format
-            formatted_symbol = symbol.replace('/', '')
-        else:
-            # If no slash, see if we need to add USDT
-            if not any(suffix in symbol for suffix in ['USDT', ':USDT', '-USDT']):
-                formatted_symbol = f"{symbol}USDT"
-            else:
-                formatted_symbol = symbol
-        
-        # Check if this market exists
-        try:
-            markets = self.exchange.markets
-            
-            # Try exact match first
-            if formatted_symbol in markets:
-                return formatted_symbol
-            
-            # Try case-insensitive match
-            for market_id in markets:
-                if market_id.upper() == formatted_symbol.upper():
-                    return market_id  # Return the exact case as in the exchange
-            
-            # Try variations
-            base_currency = clean_symbol
-            
-            # Try common formats
-            variations = [
-                f"{base_currency}USDT",
-                f"{base_currency}/USDT",
-                f"{base_currency}-USDT",
-                f"{base_currency}:USDT"
-            ]
-            
-            for variation in variations:
-                variation_no_slash = variation.replace('/', '')
-                for market_id in markets:
-                    if market_id.upper() == variation.upper() or market_id.upper() == variation_no_slash.upper():
-                        return market_id
-                        
-            # If no match found, return the standard format
-            return formatted_symbol
-        except Exception as e:
-            print(f"Warning: Could not check markets when formatting symbol: {e}")
-            return formatted_symbol
-    
-    # For other exchanges or if no special formatting is needed, return as is
-    return symbol
-
-def normalize_symbol(self, symbol: str) -> str:
-    """Normalize a symbol to a standard format regardless of the input format."""
-    # Remove common suffixes and separators
-    clean_symbol = symbol
-    for suffix in ['/USDT', ':USDT', '-USDT', 'USDT']:
-        if clean_symbol.endswith(suffix):
-            clean_symbol = clean_symbol[:-len(suffix)]
-            break
-    
-    # Strip any remaining separators
-    clean_symbol = clean_symbol.replace('/', '').replace(':', '').replace('-', '')
-    
-    return clean_symbol
-
-def find_position_by_symbol(self, symbol: str) -> dict:
-    """Find a position by symbol, trying various formats."""
-    positions = self.get_open_positions()
-    
-    # Try exact match first
-    position = next((p for p in positions if p['symbol'] == symbol), None)
-    if position:
-        return position
-    
-    # Get normalized base symbol
-    base_symbol = self.normalize_symbol(symbol)
-    
-    # Try different formats
-    for position in positions:
-        # Normalize the position symbol
-        position_base = self.normalize_symbol(position['symbol'])
-        
-        # Compare normalized symbols
-        if position_base == base_symbol:
-            return position
-    
-    # If no match found, return None
-    return None
