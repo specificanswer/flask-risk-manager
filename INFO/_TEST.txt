@@ -1,0 +1,8 @@
+python coinex_trader.py --exchange coinex --apikey 0067760991004F1F883DFBF1987A87EA --secret 14ED1DB62DC6D7FC21E09342AA27EDCA333EE7DC2371B32A status
+
+
+python coinex_trader.py --exchange coinex --apikey 0067760991004F1F883DFBF1987A87EA --secret 14ED1DB62DC6D7FC21E09342AA27EDCA333EE7DC2371B32A positions
+
+
+
+python coinex_trader.py --exchange coinex --apikey 0067760991004F1F883DFBF1987A87EA --secret 14ED1DB62DC6D7FC21E09342AA27EDCA333EE7DC2371B32A trade --symbol SOL/USDT --side buy --amount 5

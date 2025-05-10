@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,14 +9,17 @@
     <style>
         .card {
             margin-bottom: 20px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
+
         .position-card {
             border-left: 4px solid #198754;
         }
+
         .position-card.short {
             border-left: 4px solid #dc3545;
         }
+
         .flash-messages {
             position: fixed;
             top: 20px;
@@ -23,35 +27,44 @@
             z-index: 1000;
             max-width: 350px;
         }
+
         .toggle-form {
             cursor: pointer;
         }
+
         .nav-pills .nav-link.active {
             background-color: #0d6efd;
         }
+
         .profit {
             color: #198754;
             font-weight: bold;
         }
+
         .loss {
             color: #dc3545;
             font-weight: bold;
         }
+
         /* Additional styles for the enhanced UI */
         .form-range::-webkit-slider-thumb {
             background: #0d6efd;
         }
+
         .form-range::-moz-range-thumb {
             background: #0d6efd;
         }
+
         .form-range::-ms-thumb {
             background: #0d6efd;
         }
+
         .size-preset {
             min-width: 50px;
         }
     </style>
 </head>
+
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
@@ -77,14 +90,14 @@
         <!-- Flash Messages -->
         <div class="flash-messages">
             {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                        </div>
-                    {% endfor %}
-                {% endif %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+            {% endif %}
             {% endwith %}
         </div>
 
@@ -97,23 +110,23 @@
                     </div>
                     <div class="card-body">
                         <p><strong>Exchange:</strong> {{ status.exchange|upper }}</p>
-                        <p><strong>Can Trade:</strong> 
+                        <p><strong>Can Trade:</strong>
                             {% if status.can_trade %}
-                                <span class="badge bg-success">Yes</span>
+                            <span class="badge bg-success">Yes</span>
                             {% else %}
-                                <span class="badge bg-danger">No</span>
+                            <span class="badge bg-danger">No</span>
                             {% endif %}
                         </p>
                         <p><strong>Status:</strong> {{ status.status_message }}</p>
-                        <p><strong>Trades Today:</strong> {{ status.daily_trade_count }} / {{ status.max_trades_per_day }}</p>
-                        <p><strong>Daily PnL:</strong> 
+                        <p><strong>Trades Today:</strong> {{ status.daily_trade_count }} / {{ status.max_trades_per_day
+                            }}</p>
+                        <p><strong>Daily PnL:</strong>
                             {% if status.daily_pnl > 0 %}
-                                <span class="profit">+${{ status.daily_pnl }}</span>
-                            {% elif status.daily_pnl < 0 %}
-                                <span class="loss">${{ status.daily_pnl }}</span>
-                            {% else %}
+                            <span class="profit">+${{ status.daily_pnl }}</span>
+                            {% elif status.daily_pnl < 0 %} <span class="loss">${{ status.daily_pnl }}</span>
+                                {% else %}
                                 ${{ status.daily_pnl }}
-                            {% endif %}
+                                {% endif %}
                         </p>
                         <p><strong>Daily Loss Limit:</strong> ${{ status.daily_loss_limit }}</p>
                         <p><strong>Max Position Size:</strong> ${{ status.max_position_size }}</p>
@@ -131,46 +144,48 @@
                     </div>
                     <div class="card-body">
                         {% if positions %}
-                            <div class="row">
-                                {% for position in positions %}
-                                    <div class="col-md-6 mb-3">
-                                        <div class="card position-card {% if position.side == 'short' %}short{% endif %}">
-                                            <div class="card-body">
-                                                <h6 class="card-title">{{ position.symbol }}</h6>
-                                                <p class="mb-1"><strong>Side:</strong> 
-                                                    {% if position.side == 'long' %}
-                                                        <span class="badge bg-success">LONG</span>
-                                                    {% else %}
-                                                        <span class="badge bg-danger">SHORT</span>
-                                                    {% endif %}
-                                                </p>
-                                                <p class="mb-1"><strong>Size:</strong> {{ position.contracts }}</p>
-                                                <p class="mb-1"><strong>Entry Price:</strong> {{ position.entryPrice|default('N/A') }}</p>
-                                                <p class="mb-1"><strong>Leverage:</strong> {{ position.leverage|default('N/A') }}x</p>
-                                                <p class="mb-1"><strong>Unrealized PnL:</strong> 
-                                                    {% if position.unrealizedPnl is defined %}
-                                                        {% if position.unrealizedPnl > 0 %}
-                                                            <span class="profit">+${{ position.unrealizedPnl }}</span>
-                                                        {% else %}
-                                                            <span class="loss">${{ position.unrealizedPnl }}</span>
-                                                        {% endif %}
-                                                    {% else %}
-                                                        <span>N/A</span>
-                                                    {% endif %}
-                                                </p>
-                                                <form action="{{ url_for('close_position') }}" method="post" class="mt-2">
-                                                    <input type="hidden" name="symbol" value="{{ position.symbol }}">
-                                                    <button type="submit" class="btn btn-danger btn-sm">Close Position</button>
-                                                </form>
-                                            </div>
-                                        </div>
+                        <div class="row">
+                            {% for position in positions %}
+                            <div class="col-md-6 mb-3">
+                                <div class="card position-card {% if position.side == 'short' %}short{% endif %}">
+                                    <div class="card-body">
+                                        <h6 class="card-title">{{ position.symbol }}</h6>
+                                        <p class="mb-1"><strong>Side:</strong>
+                                            {% if position.side == 'long' %}
+                                            <span class="badge bg-success">LONG</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">SHORT</span>
+                                            {% endif %}
+                                        </p>
+                                        <p class="mb-1"><strong>Size:</strong> {{ position.contracts }}</p>
+                                        <p class="mb-1"><strong>Entry Price:</strong> {{
+                                            position.entryPrice|default('N/A') }}</p>
+                                        <p class="mb-1"><strong>Leverage:</strong> {{ position.leverage|default('N/A')
+                                            }}x</p>
+                                        <p class="mb-1"><strong>Unrealized PnL:</strong>
+                                            {% if position.unrealizedPnl is defined %}
+                                            {% if position.unrealizedPnl > 0 %}
+                                            <span class="profit">+${{ position.unrealizedPnl }}</span>
+                                            {% else %}
+                                            <span class="loss">${{ position.unrealizedPnl }}</span>
+                                            {% endif %}
+                                            {% else %}
+                                            <span>N/A</span>
+                                            {% endif %}
+                                        </p>
+                                        <form action="{{ url_for('close_position') }}" method="post" class="mt-2">
+                                            <input type="hidden" name="symbol" value="{{ position.symbol }}">
+                                            <button type="submit" class="btn btn-danger btn-sm">Close Position</button>
+                                        </form>
                                     </div>
-                                {% endfor %}
+                                </div>
                             </div>
+                            {% endfor %}
+                        </div>
                         {% else %}
-                            <div class="alert alert-secondary">
-                                <i class="bi bi-info-circle me-2"></i> No open positions
-                            </div>
+                        <div class="alert alert-secondary">
+                            <i class="bi bi-info-circle me-2"></i> No open positions
+                        </div>
                         {% endif %}
                     </div>
                 </div>
@@ -184,16 +199,16 @@
                     <div class="card-header bg-success text-white">
                         <ul class="nav nav-pills card-header-pills" role="tablist">
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link active" id="place-trade-tab" data-bs-toggle="tab" 
-                                        data-bs-target="#place-trade" type="button" role="tab" 
-                                        aria-controls="place-trade" aria-selected="true">
+                                <button class="nav-link active" id="place-trade-tab" data-bs-toggle="tab"
+                                    data-bs-target="#place-trade" type="button" role="tab" aria-controls="place-trade"
+                                    aria-selected="true">
                                     Place Trade
                                 </button>
                             </li>
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="update-pnl-tab" data-bs-toggle="tab" 
-                                        data-bs-target="#update-pnl" type="button" role="tab" 
-                                        aria-controls="update-pnl" aria-selected="false">
+                                <button class="nav-link" id="update-pnl-tab" data-bs-toggle="tab"
+                                    data-bs-target="#update-pnl" type="button" role="tab" aria-controls="update-pnl"
+                                    aria-selected="false">
                                     Update PnL
                                 </button>
                             </li>
@@ -202,55 +217,68 @@
                     <div class="card-body">
                         <div class="tab-content">
                             <!-- Place Trade Tab -->
-                            <div class="tab-pane fade show active" id="place-trade" role="tabpanel" aria-labelledby="place-trade-tab">
+                            <div class="tab-pane fade show active" id="place-trade" role="tabpanel"
+                                aria-labelledby="place-trade-tab">
                                 <form action="{{ url_for('place_trade') }}" method="post">
                                     {{ trade_form.hidden_tag() }}
-                                    
+
                                     <div class="mb-3">
                                         <label for="symbol" class="form-label">Symbol</label>
                                         <div class="input-group">
                                             <input type="text" class="form-control" id="symbol" name="symbol" required
-                                                placeholder="e.g. BTC/USDT or BTCUSDT">
+                                                placeholder="e.g. BTC/USDT or BTCUSDT" value="SOL/USDT">
                                             <button class="btn btn-outline-secondary" type="button" id="refreshPrice">
                                                 <i class="bi bi-arrow-clockwise"></i> Get Price
                                             </button>
                                         </div>
                                     </div>
-                                    
+
                                     <div class="mb-3">
                                         <label for="side" class="form-label">Side</label>
                                         <div class="btn-group w-100" role="group">
-                                            <input type="radio" class="btn-check" name="side" id="side-buy" value="buy" autocomplete="off" checked>
+                                            <input type="radio" class="btn-check" name="side" id="side-buy" value="buy"
+                                                autocomplete="off" checked>
                                             <label class="btn btn-outline-success" for="side-buy">Buy (Long)</label>
-                                            
-                                            <input type="radio" class="btn-check" name="side" id="side-sell" value="sell" autocomplete="off">
+
+                                            <input type="radio" class="btn-check" name="side" id="side-sell"
+                                                value="sell" autocomplete="off">
                                             <label class="btn btn-outline-danger" for="side-sell">Sell (Short)</label>
                                         </div>
                                     </div>
-                                    
+
                                     <!-- Enhanced Position Size with Slider -->
                                     <div class="mb-3">
                                         <label for="amount" class="form-label">Position Size (USD)</label>
                                         <div class="position-relative mb-2">
-                                            <input type="range" class="form-range" id="amount_slider" 
-                                                min="0" max="{{ status.max_position_size }}" step="0.1" value="1">
+                                            <input type="range" class="form-range" id="amount_slider" min="0"
+                                                max="{{ status.max_position_size }}" step="0.1" value="1">
                                         </div>
                                         <div class="d-flex justify-content-between align-items-center">
                                             <div class="input-group" style="max-width: 180px;">
                                                 <span class="input-group-text">$</span>
-                                                <input type="number" class="form-control" id="amount" name="amount" 
-                                                    step="0.01" min="0.01" max="{{ status.max_position_size }}" value="1" required>
+                                                <input type="number" class="form-control" id="amount" name="amount"
+                                                    step="0.01" min="0.01" max="{{ status.max_position_size }}"
+                                                    value="1" required>
                                             </div>
                                             <div class="btn-group" role="group">
-                                                <button type="button" class="btn btn-outline-secondary btn-sm size-preset" data-value="25">25%</button>
-                                                <button type="button" class="btn btn-outline-secondary btn-sm size-preset" data-value="50">50%</button>
-                                                <button type="button" class="btn btn-outline-secondary btn-sm size-preset" data-value="75">75%</button>
-                                                <button type="button" class="btn btn-outline-secondary btn-sm size-preset" data-value="100">Max</button>
+                                                <button type="button"
+                                                    class="btn btn-outline-secondary btn-sm size-preset"
+                                                    data-value="25">25%</button>
+                                                <button type="button"
+                                                    class="btn btn-outline-secondary btn-sm size-preset"
+                                                    data-value="50">50%</button>
+                                                <button type="button"
+                                                    class="btn btn-outline-secondary btn-sm size-preset"
+                                                    data-value="75">75%</button>
+                                                <button type="button"
+                                                    class="btn btn-outline-secondary btn-sm size-preset"
+                                                    data-value="100">Max</button>
                                             </div>
                                         </div>
-                                        <div class="form-text text-danger">Maximum: ${{ status.max_position_size }}</div>
+                                        <div class="form-text text-danger">Maximum: ${{ status.max_position_size }}
+                                        </div>
                                     </div>
-                                    
+
                                     <div class="row">
                                         <div class="col-md-6">
                                             <div class="mb-3">
@@ -264,42 +292,48 @@
                                         <div class="col-md-6">
                                             <div class="mb-3">
                                                 <label for="price" class="form-label">Limit Price</label>
-                                                <input type="number" class="form-control" id="price" name="price" 
+                                                <input type="number" class="form-control" id="price" name="price"
                                                     step="any" min="0">
                                                 <div class="form-text">Required for limit orders</div>
                                             </div>
                                         </div>
                                     </div>
-                                    
+
                                     <!-- Advanced Options Section -->
                                     <div class="accordion mb-3" id="advancedOptions">
                                         <div class="accordion-item">
                                             <h2 class="accordion-header" id="headingAdvanced">
-                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
-                                                    data-bs-target="#collapseAdvanced" aria-expanded="false" aria-controls="collapseAdvanced">
+                                                <button class="accordion-button collapsed" type="button"
+                                                    data-bs-toggle="collapse" data-bs-target="#collapseAdvanced"
+                                                    aria-expanded="false" aria-controls="collapseAdvanced">
                                                     Advanced Options
                                                 </button>
                                             </h2>
-                                            <div id="collapseAdvanced" class="accordion-collapse collapse" aria-labelledby="headingAdvanced" 
-                                                data-bs-parent="#advancedOptions">
+                                            <div id="collapseAdvanced" class="accordion-collapse collapse"
+                                                aria-labelledby="headingAdvanced" data-bs-parent="#advancedOptions">
                                                 <div class="accordion-body">
                                                     <div class="row">
                                                         <div class="col-md-6">
                                                             <div class="mb-3">
-                                                                <label for="stop_loss" class="form-label">Stop Loss</label>
-                                                                <input type="number" class="form-control" id="stop_loss" name="stop_loss" step="any" min="0">
+                                                                <label for="stop_loss" class="form-label">Stop
+                                                                    Loss</label>
+                                                                <input type="number" class="form-control" id="stop_loss"
+                                                                    name="stop_loss" step="any" min="0">
                                                                 <div class="form-text">Market order when triggered</div>
                                                             </div>
                                                         </div>
                                                         <div class="col-md-6">
                                                             <div class="mb-3">
-                                                                <label for="take_profit" class="form-label">Take Profit</label>
-                                                                <input type="number" class="form-control" id="take_profit" name="take_profit" step="any" min="0">
+                                                                <label for="take_profit" class="form-label">Take
+                                                                    Profit</label>
+                                                                <input type="number" class="form-control"
+                                                                    id="take_profit" name="take_profit" step="any"
+                                                                    min="0">
                                                                 <div class="form-text">Limit order when triggered</div>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    
+
                                                     <!-- PnL Calculator Card -->
                                                     <div class="card bg-light mb-3">
                                                         <div class="card-body p-2">
@@ -308,13 +342,15 @@
                                                                 <div class="col-6">
                                                                     <div class="d-flex justify-content-between">
                                                                         <span>Stop-Loss:</span>
-                                                                        <span id="sl_pnl" class="loss">-$0.00 (0.00%)</span>
+                                                                        <span id="sl_pnl" class="loss">-$0.00
+                                                                            (0.00%)</span>
                                                                     </div>
                                                                 </div>
                                                                 <div class="col-6">
                                                                     <div class="d-flex justify-content-between">
                                                                         <span>Take-Profit:</span>
-                                                                        <span id="tp_pnl" class="profit">+$0.00 (0.00%)</span>
+                                                                        <span id="tp_pnl" class="profit">+$0.00
+                                                                            (0.00%)</span>
                                                                     </div>
                                                                 </div>
                                                                 <div class="col-12">
@@ -326,12 +362,14 @@
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    
+
                                                     <div class="row">
                                                         <div class="col-md-6">
                                                             <div class="mb-3">
-                                                                <label for="leverage" class="form-label">Leverage</label>
-                                                                <select class="form-select" id="leverage" name="leverage">
+                                                                <label for="leverage"
+                                                                    class="form-label">Leverage</label>
+                                                                <select class="form-select" id="leverage"
+                                                                    name="leverage">
                                                                     <option value="1">1x</option>
                                                                     <option value="2">2x</option>
                                                                     <option value="3">3x</option>
@@ -345,53 +383,62 @@
                                                         </div>
                                                         <div class="col-md-6">
                                                             <div class="mb-3">
-                                                                <label for="margin_mode" class="form-label">Margin Mode</label>
-                                                                <select class="form-select" id="margin_mode" name="margin_mode">
+                                                                <label for="margin_mode" class="form-label">Margin
+                                                                    Mode</label>
+                                                                <select class="form-select" id="margin_mode"
+                                                                    name="margin_mode">
                                                                     <option value="isolated" selected>Isolated</option>
                                                                     <option value="cross">Cross</option>
                                                                 </select>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    
+
                                                     <!-- Liquidation Price Display -->
                                                     <div class="mb-3">
                                                         <div class="card bg-light mb-3">
                                                             <div class="card-body p-2">
-                                                                <div class="d-flex justify-content-between align-items-center">
+                                                                <div
+                                                                    class="d-flex justify-content-between align-items-center">
                                                                     <span>Liquidation Price:</span>
-                                                                    <span id="liquidation_price" class="fw-bold text-danger">--</span>
+                                                                    <span id="liquidation_price"
+                                                                        class="fw-bold text-danger">--</span>
                                                                 </div>
                                                                 <div class="progress" style="height: 5px;">
-                                                                    <div id="liquidation_indicator" class="progress-bar bg-danger" role="progressbar" style="width: 0%;"></div>
+                                                                    <div id="liquidation_indicator"
+                                                                        class="progress-bar bg-danger"
+                                                                        role="progressbar" style="width: 0%;"></div>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    
+
                                                     <div class="mb-3 form-check">
-                                                        <input type="checkbox" class="form-check-input" id="post_only" name="post_only">
-                                                        <label class="form-check-label" for="post_only">Post Only (Maker Only)</label>
-                                                        <div class="form-text">For limit orders, ensures order is a maker</div>
+                                                        <input type="checkbox" class="form-check-input" id="post_only"
+                                                            name="post_only">
+                                                        <label class="form-check-label" for="post_only">Post Only (Maker
+                                                            Only)</label>
+                                                        <div class="form-text">For limit orders, ensures order is a
+                                                            maker</div>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                    
+
                                     <button type="submit" class="btn btn-success w-100">
                                         <i class="bi bi-check-circle me-2"></i>Place Trade
                                     </button>
                                 </form>
                             </div>
-                            
+
                             <!-- Update PnL Tab -->
                             <div class="tab-pane fade" id="update-pnl" role="tabpanel" aria-labelledby="update-pnl-tab">
                                 <form action="{{ url_for('update_pnl') }}" method="post">
                                     {{ pnl_form.hidden_tag() }}
                                     <div class="mb-3">
                                         <label for="pnl_amount" class="form-label">PnL Amount (USD)</label>
-                                        <input type="number" class="form-control" id="pnl_amount" name="amount" 
+                                        <input type="number" class="form-control" id="pnl_amount" name="amount"
                                             step="0.01" required>
                                         <div class="form-text">Enter positive value for profit, negative for loss</div>
                                     </div>
@@ -413,53 +460,53 @@
                     </div>
                     <div class="card-body">
                         {% if status.trades_history %}
-                            <div class="table-responsive">
-                                <table class="table table-sm table-hover">
-                                    <thead>
-                                        <tr>
-                                            <th>Time</th>
-                                            <th>Symbol</th>
-                                            <th>Side</th>
-                                            <th>Size</th>
-                                            <th>Price</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for trade in status.trades_history %}
-                                            <tr>
-                                                <td>{{ trade.time }}</td>
-                                                <td>{{ trade.symbol }}</td>
-                                                <td>
-                                                    {% if trade.side == 'buy' %}
-                                                        <span class="badge bg-success">BUY</span>
-                                                    {% else %}
-                                                        <span class="badge bg-danger">SELL</span>
-                                                    {% endif %}
-                                                </td>
-                                                <td>${{ trade.amount }}</td>
-                                                <td>{{ trade.price }}</td>
-                                            </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>Symbol</th>
+                                        <th>Side</th>
+                                        <th>Size</th>
+                                        <th>Price</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for trade in status.trades_history %}
+                                    <tr>
+                                        <td>{{ trade.time }}</td>
+                                        <td>{{ trade.symbol }}</td>
+                                        <td>
+                                            {% if trade.side == 'buy' %}
+                                            <span class="badge bg-success">BUY</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">SELL</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>${{ trade.amount }}</td>
+                                        <td>{{ trade.price }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
                         {% else %}
-                            <div class="alert alert-secondary">
-                                <i class="bi bi-info-circle me-2"></i> No trade history available
-                            </div>
+                        <div class="alert alert-secondary">
+                            <i class="bi bi-info-circle me-2"></i> No trade history available
+                        </div>
                         {% endif %}
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    
+
     <footer class="bg-dark text-white py-3 mt-4">
         <div class="container text-center">
             <p class="mb-0">Crypto Futures Trader &copy; 2025</p>
         </div>
     </footer>
-    
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.0/font/bootstrap-icons.css"></script>
     <script>
@@ -471,13 +518,13 @@
             const leverage = parseFloat(document.getElementById('leverage').value) || 1;
             const stopLoss = parseFloat(document.getElementById('stop_loss').value) || 0;
             const takeProfit = parseFloat(document.getElementById('take_profit').value) || 0;
-            
+
             // Skip calculations if we're missing essential values
             if (price === 0 || amount === 0) return;
-            
+
             // Calculate position size in coins
             const positionSize = amount / price;
-            
+
             // Calculate PNL for stop loss
             if (stopLoss > 0) {
                 let slPnlAmount, slPnlPercent;
@@ -488,12 +535,12 @@
                     slPnlAmount = positionSize * (price - stopLoss) * leverage;
                     slPnlPercent = ((price - stopLoss) / price) * 100 * leverage;
                 }
-                
+
                 const slPnlElement = document.getElementById('sl_pnl');
                 slPnlElement.textContent = `${slPnlAmount.toFixed(2) > 0 ? '+' : ''}$${slPnlAmount.toFixed(2)} (${slPnlPercent.toFixed(2)}%)`;
                 slPnlElement.className = slPnlAmount >= 0 ? 'profit' : 'loss';
             }
-            
+
             // Calculate PNL for take profit
             if (takeProfit > 0) {
                 let tpPnlAmount, tpPnlPercent;
@@ -504,12 +551,12 @@
                     tpPnlAmount = positionSize * (price - takeProfit) * leverage;
                     tpPnlPercent = ((price - takeProfit) / price) * 100 * leverage;
                 }
-                
+
                 const tpPnlElement = document.getElementById('tp_pnl');
                 tpPnlElement.textContent = `${tpPnlAmount.toFixed(2) > 0 ? '+' : ''}$${tpPnlAmount.toFixed(2)} (${tpPnlPercent.toFixed(2)}%)`;
                 tpPnlElement.className = tpPnlAmount >= 0 ? 'profit' : 'loss';
             }
-            
+
             // Calculate risk-reward ratio if both SL and TP are set
             if (stopLoss > 0 && takeProfit > 0) {
                 let slAmount, tpAmount;
@@ -520,11 +567,11 @@
                     slAmount = Math.abs(price - stopLoss);
                     tpAmount = Math.abs(price - takeProfit);
                 }
-                
+
                 const ratio = (tpAmount / slAmount).toFixed(2);
                 document.getElementById('risk_reward').textContent = `1:${ratio}`;
             }
-            
+
             // Update liquidation price
             calculateLiquidationPrice();
         }
@@ -534,10 +581,10 @@
             const price = parseFloat(document.getElementById('price').value) || 0;
             const leverage = parseFloat(document.getElementById('leverage').value) || 1;
             const marginMode = document.getElementById('margin_mode').value;
-            
+
             // Skip calculations if we're missing essential values
             if (price === 0) return;
-            
+
             // Simple liquidation calculation
             let liquidationPrice;
             if (side === 'buy') {
@@ -547,24 +594,24 @@
                 // For short positions, liquidation price is above entry
                 liquidationPrice = price * (1 + (1 / leverage) * 0.95);
             }
-            
+
             // Display the liquidation price
             document.getElementById('liquidation_price').textContent = liquidationPrice.toFixed(2);
-            
+
             // Calculate distance to liquidation as percentage
             const distancePercentage = Math.abs((liquidationPrice - price) / price * 100);
-            
+
             // Update liquidation indicator
             const indicatorWidth = Math.min(100, (10 / distancePercentage) * 100);
             document.getElementById('liquidation_indicator').style.width = `${indicatorWidth}%`;
         }
-        
+
         // JavaScript to handle the order type selection
-        document.getElementById('order_type').addEventListener('change', function() {
+        document.getElementById('order_type').addEventListener('change', function () {
             const isLimit = this.value === 'limit';
             const priceField = document.getElementById('price');
             const postOnlyCheckbox = document.getElementById('post_only');
-            
+
             if (isLimit) {
                 priceField.setAttribute('required', '');
                 postOnlyCheckbox.disabled = false;
@@ -574,52 +621,52 @@
                 postOnlyCheckbox.disabled = true;
             }
         });
-        
+
         // Auto-dismiss flash messages after 5 seconds
-        document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(function() {
+        document.addEventListener('DOMContentLoaded', function () {
+            setTimeout(function () {
                 const alerts = document.querySelectorAll('.alert');
-                alerts.forEach(function(alert) {
+                alerts.forEach(function (alert) {
                     const bsAlert = new bootstrap.Alert(alert);
                     bsAlert.close();
                 });
             }, 5000);
-            
+
             // Initialize tooltips
             var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
             var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
                 return new bootstrap.Tooltip(tooltipTriggerEl)
             });
-            
+
             // Initial check for order type
             const orderTypeSelect = document.getElementById('order_type');
             if (orderTypeSelect) {
                 orderTypeSelect.dispatchEvent(new Event('change'));
             }
-            
+
             // Position size slider logic
             const amountSlider = document.getElementById('amount_slider');
             const amountInput = document.getElementById('amount');
             const maxPositionSize = parseFloat('{{ status.max_position_size }}');
-            
+
             // Update input when slider changes
-            amountSlider.addEventListener('input', function() {
+            amountSlider.addEventListener('input', function () {
                 amountInput.value = parseFloat(this.value).toFixed(2);
                 updateCalculations();
             });
-            
+
             // Update slider when input changes
-            amountInput.addEventListener('input', function() {
+            amountInput.addEventListener('input', function () {
                 let value = parseFloat(this.value);
                 if (isNaN(value)) value = 0;
                 if (value > maxPositionSize) value = maxPositionSize;
                 amountSlider.value = value;
                 updateCalculations();
             });
-            
+
             // Size preset buttons
             document.querySelectorAll('.size-preset').forEach(button => {
-                button.addEventListener('click', function() {
+                button.addEventListener('click', function () {
                     const percentage = parseFloat(this.dataset.value) / 100;
                     const newValue = (maxPositionSize * percentage).toFixed(2);
                     amountInput.value = newValue;
@@ -627,14 +674,14 @@
                     updateCalculations();
                 });
             });
-            
+
             // Add listeners for stop-loss, take-profit and leverage
             document.getElementById('stop_loss').addEventListener('input', updateCalculations);
             document.getElementById('take_profit').addEventListener('input', updateCalculations);
             document.getElementById('leverage').addEventListener('change', updateCalculations);
-            
+
             // Initialize calculations if we have price data
             if (document.getElementById('price').value) {
                 updateCalculations();
             }
-            
+    
