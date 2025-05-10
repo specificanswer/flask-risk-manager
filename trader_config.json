@@ -1,8 +1,8 @@
 {
-    "date": "2025-05-09T22:05:12.859361",
-    "daily_trade_count": 2,
+    "date": "2025-05-09T23:51:14.090236",
+    "daily_trade_count": 4,
     "daily_pnl": 0.0,
-    "last_trade_time": "2025-05-09T22:05:12.859361",
+    "last_trade_time": "2025-05-09T23:51:14.090236",
     "trades_history": [
         {
             "time": "2025-05-09T08:47:59.201869",
@@ -29,6 +29,32 @@
             "margin_mode": "isolated",
             "post_only": false,
             "order_id": "173627210471"
+        },
+        {
+            "time": "2025-05-09T23:15:09.588805",
+            "symbol": "SOLUSDT",
+            "side": "buy",
+            "amount": 1.0,
+            "price": 172.15,
+            "stop_loss": 171.0,
+            "take_profit": 173.0,
+            "leverage": 5,
+            "margin_mode": "isolated",
+            "post_only": false,
+            "order_id": "173631160358"
+        },
+        {
+            "time": "2025-05-09T23:51:14.090236",
+            "symbol": "SOLUSDT",
+            "side": "buy",
+            "amount": 1.0,
+            "price": 172.33,
+            "stop_loss": 172.2,
+            "take_profit": 172.45,
+            "leverage": 50,
+            "margin_mode": "isolated",
+            "post_only": false,
+            "order_id": "173633025143"
         }
     ]
 }

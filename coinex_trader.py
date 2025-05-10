@@ -142,6 +142,26 @@ class CryptoFuturesTrader:
         # For other exchanges or if no special formatting is needed, return as is
         return symbol
     
+    def check_order_types(self, symbol: str):
+        """Check available order types for a symbol."""
+        try:
+            formatted_symbol = self.format_symbol_for_exchange(symbol)
+            
+            # Try to get market info
+            market = self.exchange.market(formatted_symbol)
+            print(f"Market info for {formatted_symbol}:")
+            print(f"Market type: {market.get('type')}")
+            print(f"Market info: {market.get('info', {})}")
+            
+            # Try to fetch order types using exchange capabilities
+            if hasattr(self.exchange, 'has'):
+                print(f"Exchange capabilities: {self.exchange.has}")
+                
+            return True
+        except Exception as e:
+            print(f"Error checking order types: {e}")
+            return False
+    
     def place_trade(self, symbol: str, side: str, amount: float, price: float = None, 
                     stop_loss: float = None, take_profit: float = None, 
                     leverage: int = 5, margin_mode: str = 'isolated', 
@@ -193,7 +213,11 @@ class CryptoFuturesTrader:
             
             # Set margin mode
             try:
-                self.exchange.set_margin_mode(margin_mode, formatted_symbol)
+                if self.exchange_id == 'coinex':
+                    # CoinEx requires leverage parameter with margin mode
+                    self.exchange.set_margin_mode(margin_mode, formatted_symbol, {'leverage': leverage})
+                else:
+                    self.exchange.set_margin_mode(margin_mode, formatted_symbol)
                 print(f"Set margin mode to {margin_mode} for {formatted_symbol}")
             except Exception as e:
                 print(f"Warning: Could not set margin mode - {str(e)}")
@@ -250,28 +274,57 @@ class CryptoFuturesTrader:
             if stop_loss:
                 stop_side = 'sell' if side == 'buy' else 'buy'
                 try:
-                    stop_params = {'stopPrice': stop_loss, 'reduceOnly': True}
-                    stop_order = self.exchange.create_order(
-                        formatted_symbol,
-                        'stop_market', 
-                        stop_side,
-                        quantity,
-                        None,
-                        stop_params
-                    )
-                    results["stop_loss_order"] = stop_order
-                    results["message"] += f" with stop loss at {stop_loss}"
+                    print(f"Attempting to place stop loss order: {stop_side} {quantity} at {stop_loss}")
+                    
+                    if self.exchange_id == 'coinex':
+                        # CoinEx specific stop order implementation
+                        stop_params = {
+                            'stopPrice': stop_loss,
+                            'type': 'stop_limit',  # CoinEx might use stop_limit instead of stop_market
+                            'price': stop_loss,    # For stop_limit, we need a price too
+                            'postOnly': False,
+                            'reduceOnly': True
+                        }
+                        
+                        stop_order = self.exchange.create_order(
+                            formatted_symbol,
+                            'stop_limit',  # Change to stop_limit for CoinEx
+                            stop_side,
+                            quantity,
+                            stop_loss,     # Need to provide price for stop_limit
+                            stop_params
+                        )
+                    else:
+                        stop_params = {'stopPrice': stop_loss, 'reduceOnly': True}
+                        stop_order = self.exchange.create_order(
+                            formatted_symbol,
+                            'stop_market',
+                            stop_side,
+                            quantity,
+                            None,
+                            stop_params
+                        )
+
+                    print(f"Stop loss order placed successfully: {stop_order}")
                 except Exception as e:
-                    results["stop_loss_error"] = str(e)
-                    results["message"] += f". Failed to set stop loss: {str(e)}"
-            
+                    print(f"Failed to place stop loss order: {str(e)}")
+
             # Handle take profit (always as limit order)
             if take_profit:
                 tp_side = 'sell' if side == 'buy' else 'buy'
                 try:
-                    tp_params = {'reduceOnly': True}
-                    if post_only:
-                        tp_params['postOnly'] = True
+                    print(f"Attempting to place take profit order: {tp_side} {quantity} at {take_profit}")
+                    
+                    if self.exchange_id == 'coinex':
+                        # CoinEx specific parameters for take profit
+                        tp_params = {
+                            'reduceOnly': True,
+                            'postOnly': post_only if post_only else False
+                        }
+                    else:
+                        tp_params = {'reduceOnly': True}
+                        if post_only:
+                            tp_params['postOnly'] = True
                     
                     tp_order = self.exchange.create_order(
                         formatted_symbol,
@@ -281,16 +334,19 @@ class CryptoFuturesTrader:
                         take_profit,
                         tp_params
                     )
+                    print(f"Take profit order placed successfully: {tp_order}")
                     results["take_profit_order"] = tp_order
                     results["message"] += f" and take profit at {take_profit}"
                 except Exception as e:
-                    results["take_profit_error"] = str(e)
-                    results["message"] += f". Failed to set take profit: {str(e)}"
-            
+                    error_msg = str(e)
+                    print(f"Take profit error: {error_msg}")  # This goes to terminal
+                    results["take_profit_error"] = error_msg
+                    results["message"] += f". Failed to set take profit: {error_msg}"
+
             # Update state
             self.last_trade_time = datetime.now()
             self.daily_trade_count += 1
-            
+
             # Record trade
             trade_record = {
                 "time": self.last_trade_time.isoformat(),
