@@ -241,17 +241,41 @@ def get_markets():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/ticker/<symbol>", methods=["GET"])
+@app.route("/api/ticker/<path:symbol>", methods=["GET"])
 def get_ticker(symbol):
     """API endpoint to get current ticker data for a symbol"""
     if trader is None:
         return jsonify({"error": "Not connected to exchange"}), 400
 
     try:
-        ticker = trader.exchange.fetch_ticker(symbol)
+        # Format the symbol properly for the exchange
+        print(f"Original symbol from request: {symbol}")
+
+        # Try to use the trader's format_symbol_for_exchange if available
+        try:
+            formatted_symbol = trader.format_symbol_for_exchange(symbol)
+            print(f"Formatted symbol using trader method: {formatted_symbol}")
+        except Exception as format_error:
+            print(f"Error formatting symbol: {format_error}")
+            formatted_symbol = symbol
+            # Try basic formatting if the trader method fails
+            if "/" not in formatted_symbol and "USDT" in formatted_symbol.upper():
+                # Convert BTCUSDT to BTC/USDT format if needed
+                formatted_symbol = formatted_symbol.replace("USDT", "/USDT")
+                print(f"Basic formatting applied: {formatted_symbol}")
+
+        print(f"Attempting to fetch ticker for symbol: {formatted_symbol}")
+
+        # Try to fetch the ticker data
+        ticker = trader.exchange.fetch_ticker(formatted_symbol)
+
+        print(f"Ticker data received: {ticker}")
+
+        # Return the ticker data
         return jsonify(
             {
                 "symbol": symbol,
+                "formatted_symbol": formatted_symbol,
                 "last": ticker.get("last"),
                 "bid": ticker.get("bid"),
                 "ask": ticker.get("ask"),
@@ -260,7 +284,12 @@ def get_ticker(symbol):
             }
         )
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        import traceback
+
+        error_details = traceback.format_exc()
+        print(f"Error fetching ticker: {e}")
+        print(f"Traceback: {error_details}")
+        return jsonify({"error": str(e), "details": error_details}), 500
 
 
 @app.route("/api/status", methods=["GET"])

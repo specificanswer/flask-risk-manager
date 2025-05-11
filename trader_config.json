@@ -1,8 +1,8 @@
 {
-    "date": "2025-05-11T10:46:30.505075",
-    "daily_trade_count": 10,
+    "date": "2025-05-11T19:02:56.868732",
+    "daily_trade_count": 16,
     "daily_pnl": 0.0,
-    "last_trade_time": "2025-05-11T10:46:30.505075",
+    "last_trade_time": "2025-05-11T19:02:56.868732",
     "trades_history": [
         {
             "time": "2025-05-11T09:53:50.483284",
@@ -133,6 +133,84 @@
             "margin_mode": "isolated",
             "post_only": false,
             "order_id": "173746263730"
+        },
+        {
+            "time": "2025-05-11T11:30:22.428824",
+            "symbol": "SOLUSDT",
+            "side": "buy",
+            "amount": 1.0,
+            "price": 171.11,
+            "stop_loss": 171.0,
+            "take_profit": 171.25,
+            "leverage": 5,
+            "margin_mode": "isolated",
+            "post_only": false,
+            "order_id": "173749135388"
+        },
+        {
+            "time": "2025-05-11T11:31:30.504145",
+            "symbol": "SOLUSDT",
+            "side": "buy",
+            "amount": 1.0,
+            "price": 171.54,
+            "stop_loss": 171.0,
+            "take_profit": 171.7,
+            "leverage": 5,
+            "margin_mode": "isolated",
+            "post_only": false,
+            "order_id": "173749210940"
+        },
+        {
+            "time": "2025-05-11T11:32:44.162032",
+            "symbol": "SOLUSDT",
+            "side": "buy",
+            "amount": 1.0,
+            "price": 171.74,
+            "stop_loss": 171.0,
+            "take_profit": 172.0,
+            "leverage": 5,
+            "margin_mode": "isolated",
+            "post_only": false,
+            "order_id": "173749287657"
+        },
+        {
+            "time": "2025-05-11T11:35:30.513692",
+            "symbol": "SOLUSDT",
+            "side": "buy",
+            "amount": 1.0,
+            "price": 171.47,
+            "stop_loss": 170.0,
+            "take_profit": 171.5,
+            "leverage": 5,
+            "margin_mode": "isolated",
+            "post_only": false,
+            "order_id": "173749445037"
+        },
+        {
+            "time": "2025-05-11T19:01:05.908856",
+            "symbol": "SOLUSDT",
+            "side": "buy",
+            "amount": 1.0,
+            "price": 173.3,
+            "stop_loss": 173.2,
+            "take_profit": 173.4,
+            "leverage": 5,
+            "margin_mode": "isolated",
+            "post_only": false,
+            "order_id": "173771305188"
+        },
+        {
+            "time": "2025-05-11T19:02:56.868732",
+            "symbol": "SOLUSDT",
+            "side": "buy",
+            "amount": 1.0,
+            "price": 173.56,
+            "stop_loss": 173.5,
+            "take_profit": 173.7,
+            "leverage": 5,
+            "margin_mode": "isolated",
+            "post_only": false,
+            "order_id": "173771422270"
         }
     ]
 }

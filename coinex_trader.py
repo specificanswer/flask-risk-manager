@@ -649,7 +649,9 @@ class CryptoFuturesTrader:
             print(f"Error fetching positions: {e}")
             return []
 
-    def close_position(self, symbol: str) -> Dict:
+    def close_position(
+        self, symbol: str, order_type: str = "market", limit_price: float = None
+    ) -> Dict:
         """Close an open position for a symbol."""
         try:
             positions = self.get_open_positions()
@@ -660,7 +662,6 @@ class CryptoFuturesTrader:
 
             for p in positions:
                 pos_symbol = p.get("symbol")
-                # Check for exact match or substring match
                 if pos_symbol == symbol or symbol in pos_symbol or pos_symbol in symbol:
                     position = p
                     actual_symbol = pos_symbol
@@ -672,8 +673,8 @@ class CryptoFuturesTrader:
                     "message": f"No open position found for {symbol}",
                 }
 
-            # Use the actual symbol from the position
             print(f"Closing position with actual symbol: {actual_symbol}")
+            print(f"Order type: {order_type}, Limit price: {limit_price}")
 
             # Determine close direction (opposite of position)
             side = "sell" if position["side"] == "long" else "buy"
@@ -681,23 +682,49 @@ class CryptoFuturesTrader:
 
             # Place closing order with exchange-specific parameters
             if self.exchange_id == "coinex":
-                order = self.exchange.create_order(
-                    actual_symbol, "market", side, amount, None, {"reduceOnly": True}
-                )
+                if order_type == "limit" and limit_price:
+                    order = self.exchange.create_order(
+                        actual_symbol,
+                        "limit",
+                        side,
+                        amount,
+                        limit_price,
+                        {"reduceOnly": True},
+                    )
+                else:
+                    # Default to market order
+                    order = self.exchange.create_order(
+                        actual_symbol,
+                        "market",
+                        side,
+                        amount,
+                        None,
+                        {"reduceOnly": True},
+                    )
             else:
-                order = self.exchange.create_order(
-                    actual_symbol,
-                    "market",
-                    side,
-                    amount,
-                    None,
-                    {"reduceOnly": True, "type": "future"},
-                )
+                if order_type == "limit" and limit_price:
+                    order = self.exchange.create_order(
+                        actual_symbol,
+                        "limit",
+                        side,
+                        amount,
+                        limit_price,
+                        {"reduceOnly": True, "type": "future"},
+                    )
+                else:
+                    order = self.exchange.create_order(
+                        actual_symbol,
+                        "market",
+                        side,
+                        amount,
+                        None,
+                        {"reduceOnly": True, "type": "future"},
+                    )
 
             return {
                 "success": True,
                 "order": order,
-                "message": f"Successfully closed position for {actual_symbol}",
+                "message": f"Successfully closed position for {actual_symbol} with {order_type} order",
             }
 
         except Exception as e:
