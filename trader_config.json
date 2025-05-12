@@ -1,8 +1,8 @@
 {
-    "date": "2025-05-12T10:24:47.936196",
-    "daily_trade_count": 11,
+    "date": "2025-05-12T14:50:54.975042",
+    "daily_trade_count": 12,
     "daily_pnl": 0.0,
-    "last_trade_time": "2025-05-12T10:24:47.935196",
+    "last_trade_time": "2025-05-12T14:50:54.972041",
     "trades_history": [
         {
             "time": "2025-05-12T09:12:56.418537",
@@ -226,6 +226,21 @@
             "margin_mode": "isolated",
             "post_only": false,
             "order_id": "173828064548",
+            "order_type": "market",
+            "status": "filled"
+        },
+        {
+            "time": "2025-05-12T14:50:54.972041",
+            "symbol": "SOLUSDT",
+            "side": "sell",
+            "amount": 420.0,
+            "price": 172.14,
+            "stop_loss": 174.19,
+            "take_profit": 170.0,
+            "leverage": 50,
+            "margin_mode": "isolated",
+            "post_only": false,
+            "order_id": "173848925809",
             "order_type": "market",
             "status": "filled"
         }

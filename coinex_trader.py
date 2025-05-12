@@ -19,8 +19,8 @@ class CryptoFuturesTrader:
         # Risk parameters
         self.max_trades_per_day = 25
         self.cooldown_minutes = 1
-        self.max_daily_loss = 20.0  # USD
-        self.max_position_size = 5.0  # USD
+        self.max_daily_loss = 15.0  # USD
+        self.max_position_size = 2000.0  # USD
 
         # State tracking
         self.daily_trade_count = 0

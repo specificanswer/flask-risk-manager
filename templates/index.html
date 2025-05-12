@@ -359,9 +359,9 @@
                           class="form-range"
                           id="amount_slider"
                           min="0"
-                          max="50"
-                          step="0.1"
-                          value="1"
+                          max="2000"
+                          step="20"
+                          value="20"
                         />
                       </div>
                       <div
@@ -374,10 +374,10 @@
                             class="form-control"
                             id="amount"
                             name="amount"
-                            step="0.01"
-                            min="0.01"
-                            max="50"
-                            value="1"
+                            step="1"
+                            min="1"
+                            max="2000"
+                            value="20"
                             required
                           />
                         </div>
@@ -791,19 +791,24 @@
         // Calculate PNL for stop loss
         if (stopLoss > 0) {
           let slPnlAmount, slPnlPercent;
+
+          // Get position size and price
+          const positionSize =
+            parseFloat(document.getElementById("amount").value) || 0;
+
+          // Calculate the percentage change
           if (side === "buy") {
-            // Fix calculation to use proper units
-            slPnlAmount = (amount * (stopLoss - price)) / price;
+            // For long positions
             slPnlPercent = ((stopLoss - price) / price) * 100;
           } else {
-            // Fix calculation for sell side as well
-            slPnlAmount = (amount * (price - stopLoss)) / price;
+            // For short positions
             slPnlPercent = ((price - stopLoss) / price) * 100;
           }
 
-          // Apply leverage after the base calculation
-          slPnlAmount = slPnlAmount * leverage;
-          slPnlPercent = slPnlPercent * leverage;
+          // Calculate PNL based on contract value (which is the position size)
+          // and percentage change (no leverage multiplication needed as position size
+          // already includes leverage)
+          slPnlAmount = positionSize * (slPnlPercent / 100);
 
           const slPnlElement = document.getElementById("sl_pnl");
           slPnlElement.textContent = `${
@@ -815,19 +820,22 @@
         // Calculate PNL for take profit
         if (takeProfit > 0) {
           let tpPnlAmount, tpPnlPercent;
+
+          // Get position size and price
+          const positionSize =
+            parseFloat(document.getElementById("amount").value) || 0;
+
+          // Calculate the percentage change
           if (side === "buy") {
-            // Fix calculation to use proper units
-            tpPnlAmount = (amount * (takeProfit - price)) / price;
+            // For long positions
             tpPnlPercent = ((takeProfit - price) / price) * 100;
           } else {
-            // Fix calculation for sell side as well
-            tpPnlAmount = (amount * (price - takeProfit)) / price;
+            // For short positions
             tpPnlPercent = ((price - takeProfit) / price) * 100;
           }
 
-          // Apply leverage after the base calculation
-          tpPnlAmount = tpPnlAmount * leverage;
-          tpPnlPercent = tpPnlPercent * leverage;
+          // Calculate PNL based on contract value and percentage change
+          tpPnlAmount = positionSize * (tpPnlPercent / 100);
 
           const tpPnlElement = document.getElementById("tp_pnl");
           tpPnlElement.textContent = `${
@@ -1044,11 +1052,11 @@
         // Position size slider logic
         const amountSlider = document.getElementById("amount_slider");
         const amountInput = document.getElementById("amount");
-        const maxPositionSize = 50; // Fixed value of $50
+        const maxPositionSize = 2000; // Changed from 50 to 2000
 
         // Update input when slider changes
         amountSlider.addEventListener("input", function () {
-          amountInput.value = parseFloat(this.value).toFixed(2);
+          amountInput.value = parseFloat(this.value).toFixed(0); // Changed to integer value
           updateCalculations();
         });
 
@@ -1065,7 +1073,7 @@
         document.querySelectorAll(".size-preset").forEach((button) => {
           button.addEventListener("click", function () {
             const percentage = parseFloat(this.dataset.value) / 100;
-            const newValue = (maxPositionSize * percentage).toFixed(2);
+            const newValue = Math.round(maxPositionSize * percentage); // Round to whole number
             amountInput.value = newValue;
             amountSlider.value = newValue;
             updateCalculations();
