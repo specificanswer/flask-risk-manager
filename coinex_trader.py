@@ -42,6 +42,132 @@ class CryptoFuturesTrader:
         self.pending_monitors = {}  # Store SL/TP targets for positions
         self.check_interval = 5  # Check positions every 5 seconds
 
+    def check_limit_order_status(self, order_id=None):
+        """
+        Check the status of limit orders and update their status if filled.
+        If order_id is provided, only check that specific order.
+        """
+        try:
+            # Find pending limit orders to check
+            pending_orders = []
+
+            if order_id:
+                # Check specific order
+                for trade in self.trades_history:
+                    if (
+                        trade.get("order_id") == order_id
+                        and trade.get("status") == "pending"
+                    ):
+                        pending_orders.append(trade)
+            else:
+                # Check all pending orders
+                for trade in self.trades_history:
+                    if (
+                        trade.get("status") == "pending"
+                        and trade.get("order_type") == "limit"
+                    ):
+                        pending_orders.append(trade)
+
+            if not pending_orders:
+                return {"success": True, "message": "No pending orders to check"}
+
+            print(f"Checking status of {len(pending_orders)} pending limit orders")
+
+            # Check each pending order
+            updated_orders = []
+
+            for trade in pending_orders:
+                order_id = trade.get("order_id")
+                if not order_id or order_id == "unknown":
+                    continue
+
+                try:
+                    # Fetch the order status from the exchange
+                    order = self.exchange.fetch_order(order_id, trade.get("symbol"))
+                    print(f"Order {order_id} status: {order.get('status')}")
+
+                    # Update the order status
+                    if (
+                        order.get("status") == "closed"
+                        or order.get("status") == "filled"
+                    ):
+                        trade["status"] = "filled"
+                        self.daily_trade_count += 1
+                        self.last_trade_time = datetime.now()
+                        updated_orders.append(
+                            {"order_id": order_id, "status": "filled"}
+                        )
+                        print(
+                            f"Limit order {order_id} is now filled - counted as trade #{self.daily_trade_count}"
+                        )
+                    elif (
+                        order.get("status") == "canceled"
+                        or order.get("status") == "cancelled"
+                    ):
+                        trade["status"] = "canceled"
+                        updated_orders.append(
+                            {"order_id": order_id, "status": "canceled"}
+                        )
+                        print(
+                            f"Limit order {order_id} was canceled - not counted as trade"
+                        )
+                except Exception as e:
+                    print(f"Error checking order {order_id}: {e}")
+
+            # Save state if any orders were updated
+            if updated_orders:
+                self._save_state()
+                return {
+                    "success": True,
+                    "message": f"Updated {len(updated_orders)} orders",
+                    "updated": updated_orders,
+                }
+            else:
+                return {"success": True, "message": "No orders needed updating"}
+
+        except Exception as e:
+            print(f"Error checking limit orders: {e}")
+            return {
+                "success": False,
+                "message": f"Error checking limit orders: {str(e)}",
+            }
+
+    def update_order_status(self, order_id, new_status):
+        """Update the status of an order and handle filled orders."""
+        updated = False
+
+        for trade in self.trades_history:
+            if trade.get("order_id") == order_id:
+                old_status = trade.get("status")
+                trade["status"] = new_status
+                updated = True
+
+                # If this is a limit order being marked as filled
+                if old_status == "pending" and new_status == "filled":
+                    self.last_trade_time = datetime.now()
+                    self.daily_trade_count += 1
+                    print(
+                        f"Limit order {order_id} marked as filled - counted as trade #{self.daily_trade_count}"
+                    )
+
+                # If this is an order being marked as canceled
+                elif new_status == "canceled":
+                    print(
+                        f"Order {order_id} marked as canceled - not counted as a trade"
+                    )
+
+                self._save_state()
+                break
+
+        return {
+            "success": updated,
+            "message": (
+                f"Order {order_id} status updated to {new_status}"
+                if updated
+                else f"Order {order_id} not found"
+            ),
+        }
+
     def start_monitoring(self):
         """Start the position monitoring system"""
         if not self.monitoring_active:
@@ -406,18 +532,12 @@ class CryptoFuturesTrader:
     ) -> Dict:
         """
         Place a trade with risk management and advanced order features.
-
-        Args:
-            symbol: Trading pair (e.g., 'BTC/USDT')
-            side: 'buy' or 'sell'
-            amount: Position size in USD
-            price: Optional limit price
-            stop_loss: Optional stop loss price
-            take_profit: Optional take profit price
-            leverage: Leverage multiplier (1-100 depending on exchange)
-            margin_mode: 'isolated' or 'cross'
-            post_only: If True, ensure order is maker only
         """
+        # Debug output
+        print(
+            f"Trade request: Symbol={symbol}, Side={side}, Amount={amount}, Price={price}, Type={'market' if price is None else 'limit'}"
+        )
+
         # Check risk parameters
         trade_check = self.can_trade()
         if not trade_check["allowed"]:
@@ -472,15 +592,21 @@ class CryptoFuturesTrader:
             if not price:
                 try:
                     ticker = self.exchange.fetch_ticker(formatted_symbol)
-                    price = ticker["last"]
+                    price_for_calculation = ticker["last"]
+                    print(f"Got market price for calculation: {price_for_calculation}")
                 except Exception as e:
                     return {
                         "success": False,
                         "message": f"Could not fetch price for {formatted_symbol}. Error: {str(e)}",
                     }
+            else:
+                price_for_calculation = price
 
             # Convert USD amount to actual quantity
-            quantity = amount / price
+            quantity = amount / price_for_calculation
+            print(
+                f"Calculated quantity: {quantity} (${amount} / {price_for_calculation})"
+            )
 
             # Adjust for minimum quantity requirements
             if "limits" in market and "amount" in market["limits"]:
@@ -489,8 +615,9 @@ class CryptoFuturesTrader:
                     quantity = min_amount
                     print(f"Adjusted quantity to minimum: {quantity}")
 
-            # Place the order
+            # Determine order type
             order_type = "market" if price is None else "limit"
+            print(f"Order type: {order_type}")
 
             # Exchange-specific order parameters
             if self.exchange_id == "coinex":
@@ -507,24 +634,52 @@ class CryptoFuturesTrader:
                 if post_only and order_type == "limit":
                     order_params["postOnly"] = True
 
+            print(
+                f"Placing {order_type} order: {side} {quantity} {formatted_symbol} @ {price if price else 'market'}"
+            )
+
             # Place the actual order
             if order_type == "limit":
                 order = self.exchange.create_order(
-                    formatted_symbol, order_type, side, quantity, price, order_params
+                    formatted_symbol, "limit", side, quantity, price, order_params
                 )
             else:
                 order = self.exchange.create_order(
-                    formatted_symbol, order_type, side, quantity, None, order_params
+                    formatted_symbol, "market", side, quantity, None, order_params
                 )
 
+            print(f"Order placed: {order}")
+
             # After successfully placing the main order...
-            results = {
-                "success": True,
-                "order": order,
-                "message": f"Successfully placed {side} order for {formatted_symbol}",
+            order_id = order.get("id", "unknown")
+
+            # Determine if this is a market or limit order
+            is_market_order = order_type == "market"
+
+            # Record trade
+            trade_record = {
+                "time": datetime.now().isoformat(),
+                "symbol": formatted_symbol,
+                "side": side,
+                "amount": amount,
+                "price": price_for_calculation if is_market_order else price,
+                "stop_loss": stop_loss,
+                "take_profit": take_profit,
+                "leverage": leverage,
+                "margin_mode": margin_mode,
+                "post_only": post_only,
+                "order_id": order_id,
+                "order_type": order_type,
+                "status": "filled" if is_market_order else "pending",
             }
 
-            # For now, just note that SL/TP will be handled by monitoring
+            # Increment trade count for market orders
+            if is_market_order:
+                self.last_trade_time = datetime.now()
+                self.daily_trade_count += 1
+                print(f"Market order counted as trade #{self.daily_trade_count}")
+
+            # Add SL/TP to monitoring
             if stop_loss or take_profit:
                 # Use the actual symbol format returned by the exchange
                 actual_symbol = order.get("symbol", formatted_symbol)
@@ -533,39 +688,27 @@ class CryptoFuturesTrader:
                     "side": side,
                     "stop_loss": stop_loss,
                     "take_profit": take_profit,
-                    "entry_price": price,
+                    "entry_price": price if price else price_for_calculation,
                     "quantity": quantity,
                 }
 
                 print(f"Added monitor for symbol: {actual_symbol}")
 
-            # Update state
-            self.last_trade_time = datetime.now()
-            self.daily_trade_count += 1
-
-            # Record trade
-            trade_record = {
-                "time": self.last_trade_time.isoformat(),
-                "symbol": formatted_symbol,
-                "side": side,
-                "amount": amount,
-                "price": price,
-                "stop_loss": stop_loss,
-                "take_profit": take_profit,
-                "leverage": leverage,
-                "margin_mode": margin_mode,
-                "post_only": post_only,
-                "order_id": order.get("id", "unknown"),
-            }
+            # Add to trade history
             self.trades_history.append(trade_record)
 
             # Save state
             self._save_state()
 
-            return results
+            return {
+                "success": True,
+                "order": order,
+                "message": f"Successfully placed {side} {order_type} order for {formatted_symbol}",
+            }
 
         except Exception as e:
             error_msg = str(e)
+            print(f"Error placing trade: {error_msg}")
             # Check for common exchange-specific errors
             if "balance" in error_msg.lower():
                 return {
@@ -610,6 +753,28 @@ class CryptoFuturesTrader:
         """Get current trading status and risk metrics."""
         can_trade_result = self.can_trade()
 
+        # If self.daily_trade_count is incorrect, recount from trade history
+        filled_trades_today = []
+        today = datetime.now().date()
+
+        for trade in self.trades_history:
+            if trade.get("status") == "filled":
+                try:
+                    trade_time = datetime.fromisoformat(trade.get("time"))
+                    if trade_time.date() == today:
+                        filled_trades_today.append(trade)
+                except:
+                    # Skip trades with invalid time format
+                    pass
+
+        # Reset daily trade count if it doesn't match filled trades
+        if len(filled_trades_today) != self.daily_trade_count:
+            print(
+                f"WARNING: Trade count mismatch. Resetting from {self.daily_trade_count} to {len(filled_trades_today)}"
+            )
+            self.daily_trade_count = len(filled_trades_today)
+            self._save_state()
+
         return {
             "exchange": self.exchange_id,
             "date": datetime.now().isoformat(),
@@ -633,6 +798,7 @@ class CryptoFuturesTrader:
                 if self.last_trade_time
                 else None
             ),
+            "trades_history": self.trades_history,
         }
 
     def get_open_positions(self) -> List[Dict]:

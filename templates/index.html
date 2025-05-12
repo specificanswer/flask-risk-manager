@@ -152,17 +152,20 @@
                 <strong>Daily Loss Limit:</strong> ${{ status.daily_loss_limit
                 }}
               </p>
+              <p><strong>Max Loss Per Trade:</strong> $5.00</p>
               <p>
-                <strong>Max Position Size:</strong> ${{ status.max_position_size
-                }}
+                <strong>Last Trade:</strong>
+                {% if status.last_trade_time %} {{
+                status.last_trade_time.split('T')[0] }} &nbsp;&nbsp; {{
+                status.last_trade_time.split('T')[1].split('.')[0] |
+                datetimeformat }} {% else %} None {% endif %}
               </p>
               <p>
-                <strong>Last Trade:</strong> {{
-                status.last_trade_time|default('None') }}
-              </p>
-              <p>
-                <strong>Cooldown Ends:</strong> {{
-                status.cooldown_ends|default('N/A') }}
+                <strong>Cooldown Ends:</strong>
+                {% if status.cooldown_ends %} {{
+                status.cooldown_ends.split('T')[0] }} &nbsp;&nbsp; {{
+                status.cooldown_ends.split('T')[1].split('.')[0] |
+                datetimeformat }} {% else %} N/A {% endif %}
               </p>
             </div>
           </div>
@@ -356,7 +359,7 @@
                           class="form-range"
                           id="amount_slider"
                           min="0"
-                          max="{{ status.max_position_size }}"
+                          max="50"
                           step="0.1"
                           value="1"
                         />
@@ -373,7 +376,7 @@
                             name="amount"
                             step="0.01"
                             min="0.01"
-                            max="{{ status.max_position_size }}"
+                            max="50"
                             value="1"
                             required
                           />
@@ -409,8 +412,9 @@
                           </button>
                         </div>
                       </div>
-                      <div class="form-text text-danger">
-                        Maximum: ${{ status.max_position_size }}
+                      <div class="form-text">
+                        <i class="bi bi-shield-fill-check text-success"></i>
+                        Position protected by $5.00 max loss rule
                       </div>
                     </div>
 
@@ -431,7 +435,7 @@
                         </div>
                       </div>
                       <div class="col-md-6">
-                        <div class="mb-3">
+                        <div class="mb-3" id="price-group">
                           <label for="price" class="form-label"
                             >Limit Price</label
                           >
@@ -670,8 +674,16 @@
         <!-- Trade History Card -->
         <div class="col-lg-6 mb-4">
           <div class="card">
-            <div class="card-header bg-secondary text-white">
+            <div
+              class="card-header bg-secondary text-white d-flex justify-content-between align-items-center"
+            >
               <h5 class="mb-0">Trade History</h5>
+              <a
+                href="{{ url_for('check_orders') }}"
+                class="btn btn-outline-light btn-sm"
+              >
+                <i class="bi bi-arrow-repeat"></i> Check Order Status
+              </a>
             </div>
             <div class="card-body">
               {% if status.trades_history %}
@@ -689,7 +701,17 @@
                   <tbody>
                     {% for trade in status.trades_history %}
                     <tr>
-                      <td>{{ trade.time }}</td>
+                      <td>
+                        {{ trade.time.split('T')[0] }} &nbsp;&nbsp; {{
+                        trade.time.split('T')[1].split('.')[0] | datetimeformat
+                        }} {% if trade.status %}
+                        <span
+                          class="badge {% if trade.status == 'filled' %}bg-success{% elif trade.status == 'pending' %}bg-warning{% else %}bg-secondary{% endif %} ms-2"
+                        >
+                          {{ trade.status }}
+                        </span>
+                        {% endif %}
+                      </td>
                       <td>{{ trade.symbol }}</td>
                       <td>
                         {% if trade.side == 'buy' %}
@@ -875,19 +897,38 @@
         .addEventListener("change", function () {
           const isLimit = this.value === "limit";
           const priceField = document.getElementById("price");
+          const priceGroup = document.getElementById("price-group");
           const postOnlyCheckbox = document.getElementById("post_only");
 
           if (isLimit) {
+            // Limit order - price is required and enabled
             priceField.setAttribute("required", "");
             priceField.disabled = false;
             priceField.classList.remove("bg-light");
+            priceGroup.classList.remove("text-muted");
+            if (priceField.getAttribute("data-original-placeholder")) {
+              priceField.placeholder = priceField.getAttribute(
+                "data-original-placeholder"
+              );
+            }
             postOnlyCheckbox.disabled = false;
           } else {
+            // Market order - price is ignored
             priceField.removeAttribute("required");
-            // For market orders, don't disable the price field
-            // but apply a visual indicator
-            priceField.disabled = false;
+
+            // Store original placeholder if not already stored
+            if (!priceField.getAttribute("data-original-placeholder")) {
+              priceField.setAttribute(
+                "data-original-placeholder",
+                priceField.placeholder || ""
+              );
+            }
+
+            // Visual indicators that price will be ignored
+            priceField.placeholder = "Not used for market orders";
             priceField.classList.add("bg-light");
+            priceGroup.classList.add("text-muted");
+
             postOnlyCheckbox.checked = false;
             postOnlyCheckbox.disabled = true;
           }
@@ -1003,7 +1044,7 @@
         // Position size slider logic
         const amountSlider = document.getElementById("amount_slider");
         const amountInput = document.getElementById("amount");
-        const maxPositionSize = parseFloat("{{ status.max_position_size }}");
+        const maxPositionSize = 50; // Fixed value of $50
 
         // Update input when slider changes
         amountSlider.addEventListener("input", function () {

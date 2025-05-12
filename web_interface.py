@@ -15,6 +15,26 @@ app.secret_key = os.urandom(24)
 app.config["WTF_CSRF_ENABLED"] = False  # Disable CSRF for simplicity in this example
 
 
+# Add custom filter for formatting timestamps to 12-hour clock
+@app.template_filter("datetimeformat")
+def datetimeformat(value):
+    """Convert a 24-hour time string to 12-hour format with AM/PM."""
+    try:
+        # Parse the time
+        hour, minute, second = value.split(":")
+        hour = int(hour)
+
+        # Convert to 12-hour format
+        period = "AM" if hour < 12 else "PM"
+        hour = hour % 12
+        if hour == 0:
+            hour = 12
+
+        return f"{hour}:{minute}:{second} {period}"
+    except:
+        return value
+
+
 # Create simple form classes without flask_wtf dependency
 class SimpleForm:
     def validate_on_submit(self):
@@ -61,6 +81,26 @@ class PnLForm(SimpleForm):
 
 # Global trader instance
 trader = None
+
+# Counter for auto-checking orders
+request_counter = 0
+
+
+@app.before_request
+def before_request():
+    """Run before each request to perform maintenance tasks"""
+    global request_counter
+
+    # Only check orders periodically to avoid rate limits
+    if trader is not None and request.endpoint != "static":
+        request_counter += 1
+
+        # Check order status every 10 requests
+        if request_counter % 10 == 0:
+            try:
+                trader.check_limit_order_status()
+            except Exception as e:
+                print(f"Error in auto-checking orders: {e}")
 
 
 @app.route("/")
@@ -123,34 +163,37 @@ def place_trade():
         symbol = request.form["symbol"]
         side = request.form["side"]
         amount = float(request.form["amount"])
+        order_type = request.form.get("order_type", "market")
 
         # Optional parameters
-        price = (
-            float(request.form["price"])
-            if request.form.get("price") and request.form["price"].strip()
-            else None
-        )
-        stop_loss = (
-            float(request.form["stop_loss"])
-            if request.form.get("stop_loss") and request.form["stop_loss"].strip()
-            else None
-        )
-        take_profit = (
-            float(request.form["take_profit"])
-            if request.form.get("take_profit") and request.form["take_profit"].strip()
-            else None
-        )
+        price = None
+        # Only use price for limit orders
+        if order_type == "limit":
+            if request.form.get("price") and request.form["price"].strip():
+                price = float(request.form["price"])
+            else:
+                flash("Limit orders require a price", "danger")
+                return redirect(url_for("index"))
+
+        # Other parameters
+        stop_loss = None
+        if request.form.get("stop_loss") and request.form["stop_loss"].strip():
+            stop_loss = float(request.form["stop_loss"])
+
+        take_profit = None
+        if request.form.get("take_profit") and request.form["take_profit"].strip():
+            take_profit = float(request.form["take_profit"])
+
         leverage = int(request.form.get("leverage", 5))
         margin_mode = request.form.get("margin_mode", "isolated")
         post_only = "post_only" in request.form
 
-        # Validate order type and required fields
-        order_type = request.form.get("order_type", "market")
-        if order_type == "limit" and price is None:
-            flash("Limit orders require a price", "danger")
-            return redirect(url_for("index"))
+        # Debug output
+        print(
+            f"Order request: Type={order_type}, Symbol={symbol}, Side={side}, Amount={amount}, Price={price}, SL={stop_loss}, TP={take_profit}"
+        )
 
-        # Place the trade with all parameters
+        # Place the trade
         result = trader.place_trade(
             symbol=symbol,
             side=side,
@@ -356,6 +399,46 @@ def get_trade_history():
         return jsonify({"trades": trader.trades_history})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/check_orders", methods=["GET"])
+def check_orders():
+    """Check status of pending limit orders"""
+    if trader is None:
+        return redirect(url_for("setup"))
+
+    try:
+        result = trader.check_limit_order_status()
+        if result.get("updated"):
+            flash(f"Updated status of {len(result['updated'])} orders", "success")
+        else:
+            flash(result.get("message"), "info")
+    except Exception as e:
+        flash(f"Error checking orders: {str(e)}", "danger")
+
+    return redirect(url_for("index"))
+
+
+@app.route("/cancel_order", methods=["POST"])
+def cancel_order():
+    """Cancel a pending order"""
+    if trader is None:
+        return redirect(url_for("setup"))
+
+    try:
+        order_id = request.form["order_id"]
+
+        # Attempt to cancel the order with the exchange
+        result = trader.exchange.cancel_order(order_id)
+
+        # Update our internal state to mark it canceled
+        trader.update_order_status(order_id, "canceled")
+
+        flash(f"Order canceled successfully", "success")
+    except Exception as e:
+        flash(f"Error canceling order: {str(e)}", "danger")
+
+    return redirect(url_for("index"))
 
 
 @app.route("/api/monitoring_status", methods=["GET"])
