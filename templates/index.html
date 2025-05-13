@@ -359,9 +359,9 @@
                           class="form-range"
                           id="amount_slider"
                           min="0"
-                          max="50"
-                          step="0.1"
-                          value="1"
+                          max="2000"
+                          step="1"
+                          value="20"
                         />
                       </div>
                       <div
@@ -457,11 +457,11 @@
                       <div class="accordion-item">
                         <h2 class="accordion-header" id="headingAdvanced">
                           <button
-                            class="accordion-button collapsed"
+                            class="accordion-button"
                             type="button"
                             data-bs-toggle="collapse"
                             data-bs-target="#collapseAdvanced"
-                            aria-expanded="false"
+                            aria-expanded="true"
                             aria-controls="collapseAdvanced"
                           >
                             Advanced Options
@@ -469,7 +469,7 @@
                         </h2>
                         <div
                           id="collapseAdvanced"
-                          class="accordion-collapse collapse"
+                          class="accordion-collapse collapse show"
                           aria-labelledby="headingAdvanced"
                           data-bs-parent="#advancedOptions"
                         >
@@ -558,10 +558,10 @@
                                     <option value="1">1x</option>
                                     <option value="2">2x</option>
                                     <option value="3">3x</option>
-                                    <option value="5" selected>5x</option>
+                                    <option value="5">5x</option>
                                     <option value="10">10x</option>
                                     <option value="20">20x</option>
-                                    <option value="50">50x</option>
+                                    <option value="50" selected>50x</option>
                                     <option value="100">100x</option>
                                   </select>
                                 </div>
@@ -739,6 +739,66 @@
       </div>
     </div>
 
+    <!-- Position History Card -->
+    <div class="card mt-4">
+      <div
+        class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+      >
+        <h5 class="mb-0">Position History</h5>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Symbol</th>
+                <th>Type</th>
+                <th>Size</th>
+                <th>Entry</th>
+                <th>Exit</th>
+                <th>Realized PNL</th>
+                <th>Fees</th>
+              </tr>
+            </thead>
+            <tbody id="position-history-table">
+              {% if status.position_history %} {% for position in
+              status.position_history %}
+              <tr>
+                <td>
+                  {{ position.close_time.split('T')[0] }} &nbsp;&nbsp; {{
+                  position.close_time.split('T')[1].split('.')[0] |
+                  datetimeformat }}
+                </td>
+                <td>{{ position.symbol }}</td>
+                <td>
+                  {% if position.side == 'long' %}
+                  <span class="badge bg-success">LONG</span>
+                  {% else %}
+                  <span class="badge bg-danger">SHORT</span>
+                  {% endif %}
+                </td>
+                <td>${{ position.size }}</td>
+                <td>{{ position.entry_price }}</td>
+                <td>{{ position.exit_price }}</td>
+                <td
+                  class="{% if position.realized_pnl > 0 %}profit{% elif position.realized_pnl < 0 %}loss{% endif %}"
+                >
+                  ${{ position.realized_pnl }}
+                </td>
+                <td>${{ position.fees }}</td>
+              </tr>
+              {% endfor %} {% else %}
+              <tr>
+                <td colspan="8" class="text-center">No closed positions yet</td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <footer class="bg-dark text-white py-3 mt-4">
       <div class="container text-center">
         <p class="mb-0">Crypto Futures Trader &copy; 2025</p>
@@ -785,25 +845,21 @@
           document.getElementById("price").value = price.toFixed(2);
         }
 
-        // Calculate position size in coins
-        const positionSize = amount / price;
-
         // Calculate PNL for stop loss
         if (stopLoss > 0) {
           let slPnlAmount, slPnlPercent;
+
+          // Calculate the percentage change
           if (side === "buy") {
-            // Fix calculation to use proper units
-            slPnlAmount = (amount * (stopLoss - price)) / price;
+            // For long positions: percentage change is (exit - entry) / entry
             slPnlPercent = ((stopLoss - price) / price) * 100;
           } else {
-            // Fix calculation for sell side as well
-            slPnlAmount = (amount * (price - stopLoss)) / price;
+            // For short positions: percentage change is (entry - exit) / entry
             slPnlPercent = ((price - stopLoss) / price) * 100;
           }
 
-          // Apply leverage after the base calculation
-          slPnlAmount = slPnlAmount * leverage;
-          slPnlPercent = slPnlPercent * leverage;
+          // Calculate the actual PnL amount based on position size and percentage
+          slPnlAmount = amount * (slPnlPercent / 100);
 
           const slPnlElement = document.getElementById("sl_pnl");
           slPnlElement.textContent = `${
@@ -815,19 +871,18 @@
         // Calculate PNL for take profit
         if (takeProfit > 0) {
           let tpPnlAmount, tpPnlPercent;
+
+          // Calculate the percentage change
           if (side === "buy") {
-            // Fix calculation to use proper units
-            tpPnlAmount = (amount * (takeProfit - price)) / price;
+            // For long positions: percentage change is (exit - entry) / entry
             tpPnlPercent = ((takeProfit - price) / price) * 100;
           } else {
-            // Fix calculation for sell side as well
-            tpPnlAmount = (amount * (price - takeProfit)) / price;
+            // For short positions: percentage change is (entry - exit) / entry
             tpPnlPercent = ((price - takeProfit) / price) * 100;
           }
 
-          // Apply leverage after the base calculation
-          tpPnlAmount = tpPnlAmount * leverage;
-          tpPnlPercent = tpPnlPercent * leverage;
+          // Calculate the actual PnL amount based on position size and percentage
+          tpPnlAmount = amount * (tpPnlPercent / 100);
 
           const tpPnlElement = document.getElementById("tp_pnl");
           tpPnlElement.textContent = `${
@@ -1041,34 +1096,49 @@
           orderTypeSelect.dispatchEvent(new Event("change"));
         }
 
-        // Position size slider logic
+        // Position size slider logic - revised to use max position size of 2000
         const amountSlider = document.getElementById("amount_slider");
         const amountInput = document.getElementById("amount");
-        const maxPositionSize = 50; // Fixed value of $50
+        const maxPositionSize = 2000; // Reset to 2000
 
         // Update input when slider changes
-        amountSlider.addEventListener("input", function () {
-          amountInput.value = parseFloat(this.value).toFixed(2);
-          updateCalculations();
-        });
+        if (amountSlider) {
+          amountSlider.addEventListener("input", function () {
+            if (amountInput) {
+              amountInput.value = parseFloat(this.value).toFixed(0);
+              updateCalculations();
+              // Save to localStorage
+              localStorage.setItem("trading_amount", amountInput.value);
+            }
+          });
+        }
 
         // Update slider when input changes
-        amountInput.addEventListener("input", function () {
-          let value = parseFloat(this.value);
-          if (isNaN(value)) value = 0;
-          if (value > maxPositionSize) value = maxPositionSize;
-          amountSlider.value = value;
-          updateCalculations();
-        });
+        if (amountInput) {
+          amountInput.addEventListener("input", function () {
+            if (amountSlider) {
+              let value = parseFloat(this.value);
+              if (isNaN(value)) value = 0;
+              if (value > maxPositionSize) value = maxPositionSize;
+              amountSlider.value = value;
+              updateCalculations();
+              // Save to localStorage
+              localStorage.setItem("trading_amount", value);
+            }
+          });
+        }
 
         // Size preset buttons
         document.querySelectorAll(".size-preset").forEach((button) => {
           button.addEventListener("click", function () {
             const percentage = parseFloat(this.dataset.value) / 100;
-            const newValue = (maxPositionSize * percentage).toFixed(2);
+            const newValue = Math.round(2000 * percentage); // Use 2000 as max and round to whole number
             amountInput.value = newValue;
             amountSlider.value = newValue;
             updateCalculations();
+
+            // Save to localStorage
+            localStorage.setItem("trading_amount", newValue);
           });
         });
 
@@ -1096,6 +1166,114 @@
 
         // Initialize calculations
         updateCalculations();
+      });
+    </script>
+
+    <script>
+      // Form value persistence
+      document.addEventListener("DOMContentLoaded", function () {
+        // Get all form elements we want to save
+        const formElements = [
+          "symbol",
+          "amount",
+          "order_type",
+          "price",
+          "stop_loss",
+          "take_profit",
+          "leverage",
+          "margin_mode",
+        ];
+
+        // Restore saved values on page load
+        formElements.forEach((id) => {
+          const savedValue = localStorage.getItem(`trading_${id}`);
+          const element = document.getElementById(id);
+
+          if (element && savedValue !== null) {
+            if (element.type === "checkbox") {
+              element.checked = savedValue === "true";
+            } else if (element.tagName === "SELECT") {
+              element.value = savedValue;
+              // Trigger change event to handle any dependencies
+              element.dispatchEvent(new Event("change"));
+            } else {
+              // For amount input, make sure it doesn't exceed max
+              if (id === "amount") {
+                element.value = Math.min(parseFloat(savedValue), 2000);
+              } else {
+                element.value = savedValue;
+              }
+            }
+          }
+        });
+
+        // Special case for side radio buttons
+        const savedSide = localStorage.getItem("trading_side");
+        if (savedSide) {
+          const sideInput = document.querySelector(
+            `input[name="side"][value="${savedSide}"]`
+          );
+          if (sideInput) {
+            sideInput.checked = true;
+          }
+        }
+
+        // Save values when form elements change
+        formElements.forEach((id) => {
+          const element = document.getElementById(id);
+          if (element) {
+            element.addEventListener("change", function () {
+              if (this.type === "checkbox") {
+                localStorage.setItem(`trading_${id}`, this.checked);
+              } else {
+                localStorage.setItem(`trading_${id}`, this.value);
+              }
+            });
+
+            // For text inputs, also save on keyup with a delay
+            if (
+              element.tagName === "INPUT" &&
+              (element.type === "text" || element.type === "number")
+            ) {
+              element.addEventListener("input", function () {
+                // Use a short timeout to avoid saving on every keystroke
+                clearTimeout(element.saveTimeout);
+                element.saveTimeout = setTimeout(() => {
+                  localStorage.setItem(`trading_${id}`, this.value);
+                }, 500);
+              });
+            }
+          }
+        });
+
+        // Handle side radio buttons
+        document.querySelectorAll('input[name="side"]').forEach((radio) => {
+          radio.addEventListener("change", function () {
+            if (this.checked) {
+              localStorage.setItem("trading_side", this.value);
+            }
+          });
+        });
+
+        // Also save post_only checkbox
+        const postOnlyCheckbox = document.getElementById("post_only");
+        if (postOnlyCheckbox) {
+          // Restore
+          const savedPostOnly = localStorage.getItem("trading_post_only");
+          if (savedPostOnly !== null) {
+            postOnlyCheckbox.checked = savedPostOnly === "true";
+          }
+
+          // Save on change
+          postOnlyCheckbox.addEventListener("change", function () {
+            localStorage.setItem("trading_post_only", this.checked);
+          });
+        }
+
+        // Force update calculations after restoring values
+        if (typeof updateCalculations === "function") {
+          updateCalculations();
+        }
       });
     </script>
   </body>

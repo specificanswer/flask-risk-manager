@@ -42,6 +42,38 @@ class CryptoFuturesTrader:
         self.pending_monitors = {}  # Store SL/TP targets for positions
         self.check_interval = 5  # Check positions every 5 seconds
 
+        # State tracking
+        self.daily_trade_count = 0
+        self.daily_pnl = 0.0
+        self.last_trade_time = None
+        self.trades_history = []
+        self.position_history = []  # Add this line to track closed positions
+        self.config_path = config_path
+        self.exchange_id = exchange_id.lower()
+
+    def record_closed_position(
+        self, symbol, side, size, entry_price, exit_price, realized_pnl, fees
+    ):
+        """Record a closed position with PNL details."""
+        position_record = {
+            "close_time": datetime.now().isoformat(),
+            "symbol": symbol,
+            "side": side,
+            "size": size,
+            "entry_price": entry_price,
+            "exit_price": exit_price,
+            "realized_pnl": realized_pnl,
+            "fees": fees,
+        }
+
+        self.position_history.append(position_record)
+        print(
+            f"Recorded closed position: {side} {symbol} with PNL: {realized_pnl} USDT"
+        )
+
+        # Save state
+        self._save_state()
+
     def check_limit_order_status(self, order_id=None):
         """
         Check the status of limit orders and update their status if filled.
@@ -414,6 +446,7 @@ class CryptoFuturesTrader:
                         else None
                     )
                     self.trades_history = state.get("trades_history", [])
+                    self.position_history = state.get("position_history", [])
                     print(
                         f"Loaded today's state: {self.daily_trade_count} trades, ${self.daily_pnl} PnL"
                     )
@@ -432,6 +465,7 @@ class CryptoFuturesTrader:
                 self.last_trade_time.isoformat() if self.last_trade_time else None
             ),
             "trades_history": self.trades_history,
+            "position_history": self.position_history,
         }
 
         with open(self.config_path, "w") as f:
@@ -619,6 +653,9 @@ class CryptoFuturesTrader:
             order_type = "market" if price is None else "limit"
             print(f"Order type: {order_type}")
 
+            # Determine if this is a maker order
+            is_maker = order_type == "limit"
+
             # Exchange-specific order parameters
             if self.exchange_id == "coinex":
                 # For CoinEx swap
@@ -670,6 +707,7 @@ class CryptoFuturesTrader:
                 "post_only": post_only,
                 "order_id": order_id,
                 "order_type": order_type,
+                "is_maker": is_maker,
                 "status": "filled" if is_market_order else "pending",
             }
 
@@ -799,6 +837,7 @@ class CryptoFuturesTrader:
                 else None
             ),
             "trades_history": self.trades_history,
+            "position_history": self.position_history,
         }
 
     def get_open_positions(self) -> List[Dict]:
@@ -886,6 +925,89 @@ class CryptoFuturesTrader:
                         None,
                         {"reduceOnly": True, "type": "future"},
                     )
+
+            # Try to get current price if needed for PNL calculation
+            price_for_calc = None
+            try:
+                ticker = self.exchange.fetch_ticker(actual_symbol)
+                price_for_calc = ticker["last"]
+            except Exception as e:
+                print(f"Warning: Could not fetch price for calculation: {e}")
+
+            # Calculate and record position history
+            try:
+                # Get position details
+                order_details = order
+                position_side = position["side"]
+                position_size = (
+                    float(position["contracts"]) * price_for_calc
+                    if price_for_calc
+                    else float(position.get("notional", 0))
+                )
+                entry_price = float(position.get("entryPrice", 0))
+                exit_price = float(order_details.get("price", price_for_calc or 0))
+
+                # Calculate realized PNL
+                if position_side == "long":
+                    realized_pnl = (
+                        position_size * (exit_price - entry_price) / entry_price
+                    )
+                else:
+                    realized_pnl = (
+                        position_size * (entry_price - exit_price) / entry_price
+                    )
+
+                # Get the original trade details to determine the entry fee
+                entry_is_maker = False
+                original_trade = None
+                for trade in self.trades_history:
+                    if (
+                        trade.get("symbol") == actual_symbol
+                        and trade.get("side") == position["side"]
+                    ):
+                        original_trade = trade
+                        entry_is_maker = trade.get("is_maker", False)
+                        break
+
+                # Calculate exact fees based on maker/taker status
+                maker_fee_rate = 0.0003  # 0.03%
+                taker_fee_rate = 0.0005  # 0.05%
+
+                # Entry fee based on original order type
+                entry_fee_rate = maker_fee_rate if entry_is_maker else taker_fee_rate
+
+                # Exit fee based on current order type
+                exit_is_maker = order_type == "limit"
+                exit_fee_rate = maker_fee_rate if exit_is_maker else taker_fee_rate
+
+                # Calculate total fees
+                entry_fee = position_size * entry_fee_rate
+                exit_fee = position_size * exit_fee_rate
+                total_fees = entry_fee + exit_fee
+
+                print(
+                    f"Fees calculation: Entry={entry_is_maker}({entry_fee_rate}), Exit={exit_is_maker}({exit_fee_rate}), Total=${total_fees:.6f}"
+                )
+
+                # Record the closed position
+                self.record_closed_position(
+                    symbol=actual_symbol,
+                    side=position_side,
+                    size=position_size,
+                    entry_price=entry_price,
+                    exit_price=exit_price,
+                    realized_pnl=round(realized_pnl, 2),
+                    fees=round(total_fees, 6),  # Increased precision for fees
+                )
+            except Exception as e:
+                print(f"Error recording position history: {e}")
+
+            # Then the return statement
+            return {
+                "success": True,
+                "order": order,
+                "message": f"Successfully closed position for {actual_symbol} with {order_type} order",
+            }
 
             return {
                 "success": True,
